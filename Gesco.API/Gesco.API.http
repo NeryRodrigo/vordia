@@ -1,0 +1,6 @@
+@Oima.API_HostAddress = http://localhost:5033
+
+GET {{Oima.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
