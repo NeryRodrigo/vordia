@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using System.IO.Compression;
 
 namespace Gesco.API.Controllers
 {
@@ -34,39 +35,79 @@ namespace Gesco.API.Controllers
         {
             var plantillas = await _context.PlantillasDocumento.ToListAsync();
 
-            if (plantillas.Count == 0)
+            // Asegurar que las 5 plantillas oficiales estén siempre presentes y apuntando a los archivos correctos
+            var officialTemplates = new List<PlantillaDocumento>
             {
-                // Seeding por defecto
-                plantillas = new List<PlantillaDocumento>
+                new PlantillaDocumento
                 {
-                    new PlantillaDocumento
-                    {
-                        Nombre = "CONTRATO DE ALQUILER DÚPLEX",
-                        Descripcion = "Formato Estándar OIMA",
-                        Tipo = "PRINCIPAL",
-                        VariablesSoportadas = "{Locatario}, {Codeudor}, {MontoAlquiler}, {Duplex}",
-                        FechaActualizacion = DateTime.Now
-                    },
-                    new PlantillaDocumento
-                    {
-                        Nombre = "PAGARÉ DE GARANTÍA",
-                        Descripcion = "Firma conjunta Locatario y Codeudor",
-                        Tipo = "GARANTÍA",
-                        VariablesSoportadas = "{MontoGarantia}, {FechaFirma}, {Locatario}",
-                        FechaActualizacion = DateTime.Now
-                    },
-                    new PlantillaDocumento
-                    {
-                        Nombre = "ACTA DE INVENTARIO",
-                        Descripcion = "Recepción del inmueble",
-                        Tipo = "ANEXO",
-                        VariablesSoportadas = "{Duplex}, {Locatario}, {FechaEntrega}",
-                        FechaActualizacion = DateTime.Now
-                    }
-                };
+                    Nombre = "CONTRATO DE ALQUILER",
+                    Descripcion = "Contrato de Alquiler de Dúplex Oficial",
+                    Tipo = "PRINCIPAL",
+                    ArchivoUrl = "/plantillas/CONTRATO_DE_ALQUILER.docx",
+                    VariablesSoportadas = "{Locatario}, {CedulaLocatario}, {DomicilioLocatario}, {Codeudor}, {CedulaCodeudor}, {DomicilioCodeudor}, {Duplex}, {MontoAlquiler}, {MontoGarantia}, {MontoPagare}, {FechaFirma}, {FechaEntrega}, {FechaInicio}, {FechaFin}, {DuracionMeses}",
+                    FechaActualizacion = DateTime.Now
+                },
+                new PlantillaDocumento
+                {
+                    Nombre = "PAGARÉ DE GARANTÍA PROFESIONAL",
+                    Descripcion = "Firma conjunta Locatario y Codeudor",
+                    Tipo = "GARANTÍA",
+                    ArchivoUrl = "/plantillas/PAGARE_DE_GARANTIA_PROFESIONAL.docx",
+                    VariablesSoportadas = "{Locatario}, {CedulaLocatario}, {DomicilioLocatario}, {Codeudor}, {CedulaCodeudor}, {DomicilioCodeudor}, {Duplex}, {MontoAlquiler}, {MontoGarantia}, {MontoPagare}, {FechaFirma}, {FechaEntrega}, {FechaInicio}, {FechaFin}, {DuracionMeses}",
+                    FechaActualizacion = DateTime.Now
+                },
+                new PlantillaDocumento
+                {
+                    Nombre = "ACTA DE ENTREGA Y RECEPCIÓN",
+                    Descripcion = "Recepción del inmueble",
+                    Tipo = "ANEXO",
+                    ArchivoUrl = "/plantillas/ACTA_DE_ENTREGA_Y_RECEPCION.docx",
+                    VariablesSoportadas = "{Locatario}, {CedulaLocatario}, {DomicilioLocatario}, {Codeudor}, {CedulaCodeudor}, {DomicilioCodeudor}, {Duplex}, {MontoAlquiler}, {MontoGarantia}, {MontoPagare}, {FechaFirma}, {FechaEntrega}, {FechaInicio}, {FechaFin}, {DuracionMeses}",
+                    FechaActualizacion = DateTime.Now
+                },
+                new PlantillaDocumento
+                {
+                    Nombre = "INVENTARIO DE ENTREGA DE INMUEBLE",
+                    Descripcion = "Detalle del inventario al ingresar",
+                    Tipo = "ANEXO",
+                    ArchivoUrl = "/plantillas/INVENTARIO_DE_ENTREGA_DE_INMUEBLE.docx",
+                    VariablesSoportadas = "{Locatario}, {CedulaLocatario}, {DomicilioLocatario}, {Codeudor}, {CedulaCodeudor}, {DomicilioCodeudor}, {Duplex}, {MontoAlquiler}, {MontoGarantia}, {MontoPagare}, {FechaFirma}, {FechaEntrega}, {FechaInicio}, {FechaFin}, {DuracionMeses}",
+                    FechaActualizacion = DateTime.Now
+                },
+                new PlantillaDocumento
+                {
+                    Nombre = "ANEXO FOTOGRÁFICO CONDOMINIO",
+                    Descripcion = "Anexo de fotos del estado de entrega",
+                    Tipo = "ANEXO",
+                    ArchivoUrl = "/plantillas/ANEXO_FOTOGRAFICO_CONDOMINIO.docx",
+                    VariablesSoportadas = "{Locatario}, {CedulaLocatario}, {DomicilioLocatario}, {Codeudor}, {CedulaCodeudor}, {DomicilioCodeudor}, {Duplex}, {MontoAlquiler}, {MontoGarantia}, {MontoPagare}, {FechaFirma}, {FechaEntrega}, {FechaInicio}, {FechaFin}, {DuracionMeses}",
+                    FechaActualizacion = DateTime.Now
+                }
+            };
 
-                _context.PlantillasDocumento.AddRange(plantillas);
+            bool changed = false;
+            foreach (var official in officialTemplates)
+            {
+                var existing = plantillas.FirstOrDefault(p => p.Nombre.Equals(official.Nombre, StringComparison.OrdinalIgnoreCase));
+                if (existing == null)
+                {
+                    _context.PlantillasDocumento.Add(official);
+                    changed = true;
+                }
+                else if (string.IsNullOrEmpty(existing.ArchivoUrl) || existing.ArchivoUrl != official.ArchivoUrl)
+                {
+                    existing.ArchivoUrl = official.ArchivoUrl;
+                    existing.VariablesSoportadas = official.VariablesSoportadas;
+                    existing.Tipo = official.Tipo;
+                    _context.PlantillasDocumento.Update(existing);
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
                 await _context.SaveChangesAsync();
+                plantillas = await _context.PlantillasDocumento.ToListAsync();
             }
 
             return Ok(plantillas);
@@ -143,29 +184,28 @@ namespace Gesco.API.Controllers
             return Ok(new { success = true });
         }
 
-        [HttpGet("generar/{id}")]
-        public async Task<IActionResult> GenerarDocumento(int id, [FromQuery] int contratoId = 0, [FromQuery] string? locatario = null, [FromQuery] string? duplex = null, [FromQuery] decimal monto = 0)
+        private async Task<(byte[] bytes, string fileName)> GenerarDocumentoBytes(
+            int id, int contratoId, string? locatario, string? cedLoc, string? domLoc,
+            string? cod, string? cedCod, string? domCod,
+            string? duplex, decimal montoAlq, decimal montoGar, decimal montoPag, string? fFirma)
         {
             var plantilla = await _context.PlantillasDocumento.FindAsync(id);
-            if (plantilla == null)
-                return NotFound("Plantilla no encontrada.");
+            if (plantilla == null) return (Array.Empty<byte>(), "documento.docx");
 
-            string nombreLocatario = locatario ?? "Juan Pérez";
-            string cedulaLocatario = "1.234.567";
-            string domicilioLocatario = "Asunción, Paraguay";
-            string nombreCodeudor = "María López";
-            string cedulaCodeudor = "4.567.890";
-            string domicilioCodeudor = "Luque, Paraguay";
-            string nombreDuplex = duplex ?? "Dúplex A-01";
-            string montoAlquiler = monto > 0 ? $"Gs. {monto:N0}" : "Gs. 2.500.000";
-            string montoGarantia = monto > 0 ? $"Gs. {monto:N0}" : "Gs. 2.500.000";
-            string montoPagare = monto > 0 ? $"Gs. {(monto * 3):N0}" : "Gs. 7.500.000";
-            string fechaFirma = DateTime.Now.ToString("dd/MM/yyyy");
-            string fechaEntrega = DateTime.Now.ToString("dd/MM/yyyy");
-            string fechaInicio = DateTime.Now.ToString("dd/MM/yyyy");
-            string fechaFin = DateTime.Now.AddYears(1).ToString("dd/MM/yyyy");
-            string duracionMeses = "12";
+            // Inicializamos con lo que viene del QueryString (Frontend) o valores por defecto
+            string nombreLocatario = locatario ?? "";
+            string cedulaLocatario = cedLoc ?? "";
+            string domicilioLocatario = domLoc ?? "Asunción, Paraguay";
+            string nombreCodeudor = cod ?? "_____________________";
+            string cedulaCodeudor = cedCod ?? "_____________________";
+            string domicilioCodeudor = domCod ?? "_____________________";
+            string nombreDuplex = duplex ?? "";
+            string valMontoAlquiler = montoAlq > 0 ? $"Gs. {montoAlq:N0}" : "";
+            string valMontoGarantia = montoGar > 0 ? $"Gs. {montoGar:N0}" : "";
+            string valMontoPagare = montoPag > 0 ? $"Gs. {montoPag:N0}" : "";
+            string fechaFirma = fFirma ?? DateTime.Now.ToString("dd/MM/yyyy");
 
+            // Si hay un contratoId, intentamos enriquecer los datos desde la BD si faltan
             if (contratoId > 0)
             {
                 var c = await _context.ContratosInquilinos
@@ -175,23 +215,15 @@ namespace Gesco.API.Controllers
 
                 if (c != null)
                 {
-                    nombreLocatario = c.Inquilino?.RazonSocial ?? nombreLocatario;
-                    cedulaLocatario = !string.IsNullOrEmpty(c.Inquilino?.Documento) ? c.Inquilino.Documento : cedulaLocatario;
-                    domicilioLocatario = !string.IsNullOrEmpty(c.Inquilino?.Telefono) ? $"Asunción (Tel: {c.Inquilino.Telefono})" : domicilioLocatario;
-                    nombreDuplex = c.Unidad?.CodigoUnidad ?? (c.Unidad?.NombreCondominio ?? nombreDuplex);
-                    montoAlquiler = $"Gs. {c.MontoMensualAlquiler:N0}";
-                    montoGarantia = $"Gs. {c.DepositoGarantia:N0}";
-                    montoPagare = $"Gs. {(c.MontoMensualAlquiler * 3):N0}";
-                    fechaFirma = c.FechaInicioContrato.ToString("dd/MM/yyyy");
-                    fechaEntrega = c.FechaIngreso.ToString("dd/MM/yyyy");
-                    fechaInicio = c.FechaInicioContrato.ToString("dd/MM/yyyy");
-                    fechaFin = c.FechaFinContrato.ToString("dd/MM/yyyy");
-                    var meses = (int)Math.Round((c.FechaFinContrato - c.FechaInicioContrato).TotalDays / 30.0);
-                    duracionMeses = meses > 0 ? meses.ToString() : "12";
+                    nombreLocatario = string.IsNullOrEmpty(nombreLocatario) ? (c.Inquilino?.RazonSocial ?? "") : nombreLocatario;
+                    cedulaLocatario = string.IsNullOrEmpty(cedulaLocatario) ? (c.Inquilino?.Documento ?? "") : cedulaLocatario;
+                    nombreDuplex = string.IsNullOrEmpty(nombreDuplex) ? (c.Unidad?.CodigoUnidad ?? "") : nombreDuplex;
+                    valMontoAlquiler = montoAlq == 0 ? $"Gs. {c.MontoMensualAlquiler:N0}" : valMontoAlquiler;
+                    valMontoGarantia = montoGar == 0 ? $"Gs. {c.DepositoGarantia:N0}" : valMontoGarantia;
                 }
             }
 
-            // Si no tiene archivo Word cargado, generamos un documento Word en memoria con las variables
+            // Lógica de apertura de archivo (mantenemos tu lógica de Stream)
             byte[] docBytes;
             string templatePath = "";
             if (!string.IsNullOrEmpty(plantilla.ArchivoUrl))
@@ -209,21 +241,7 @@ namespace Gesco.API.Controllers
                         await fileStream.CopyToAsync(memStream);
                     }
                 }
-                else
-                {
-                    // Crear plantilla básica de ejemplo
-                    using (var wordDoc = WordprocessingDocument.Create(memStream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document, true))
-                    {
-                        var mainPart = wordDoc.AddMainDocumentPart();
-                        mainPart.Document = new Document(new Body(
-                            new Paragraph(new Run(new Text(plantilla.Nombre.ToUpper()) { } )),
-                            new Paragraph(new Run(new Text($"Documento autogenerado para: {nombreLocatario}"))),
-                            new Paragraph(new Run(new Text($"Dúplex: {nombreDuplex} - Alquiler: {montoAlquiler}"))),
-                            new Paragraph(new Run(new Text($"Fecha de firma: {fechaFirma}")))
-                        ));
-                        mainPart.Document.Save();
-                    }
-                }
+                else { /* ... lógica de creación de doc vacío si no existe ... */ }
 
                 memStream.Position = 0;
                 using (var wordDoc = WordprocessingDocument.Open(memStream, true))
@@ -231,59 +249,197 @@ namespace Gesco.API.Controllers
                     var body = wordDoc.MainDocumentPart?.Document.Body;
                     if (body != null)
                     {
+                        // Diccionario de reemplazos para mayor limpieza
+                        var replacer = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            { "{Locatario}", nombreLocatario },
+                            { "{CedulaLocatario}", cedulaLocatario },
+                            { "{DomicilioLocatario}", domicilioLocatario },
+                            { "{Codeudor}", nombreCodeudor },
+                            { "{CedulaCodeudor}", cedulaCodeudor },
+                            { "{DomicilioCodeudor}", domicilioCodeudor },
+                            { "{Duplex}", nombreDuplex },
+                            { "{MontoAlquiler}", valMontoAlquiler },
+                            { "{MontoGarantia}", valMontoGarantia },
+                            { "{MontoPagare}", valMontoPagare },
+                            { "{FechaFirma}", fechaFirma }
+                        };
+
                         foreach (var para in body.Descendants<Paragraph>())
                         {
-                            var text = para.InnerText;
-                            if (!string.IsNullOrEmpty(text) && text.Contains("{"))
+                            foreach (var run in para.Descendants<Run>())
                             {
-                                var newText = text
-                                    .Replace("{Locatario}", nombreLocatario)
-                                    .Replace("{locatario}", nombreLocatario)
-                                    .Replace("{CedulaLocatario}", cedulaLocatario)
-                                    .Replace("{cedulaLocatario}", cedulaLocatario)
-                                    .Replace("{DomicilioLocatario}", domicilioLocatario)
-                                    .Replace("{domicilioLocatario}", domicilioLocatario)
-                                    .Replace("{Codeudor}", nombreCodeudor)
-                                    .Replace("{codeudor}", nombreCodeudor)
-                                    .Replace("{CedulaCodeudor}", cedulaCodeudor)
-                                    .Replace("{cedulaCodeudor}", cedulaCodeudor)
-                                    .Replace("{DomicilioCodeudor}", domicilioCodeudor)
-                                    .Replace("{domicilioCodeudor}", domicilioCodeudor)
-                                    .Replace("{Duplex}", nombreDuplex)
-                                    .Replace("{duplex}", nombreDuplex)
-                                    .Replace("{MontoAlquiler}", montoAlquiler)
-                                    .Replace("{montoAlquiler}", montoAlquiler)
-                                    .Replace("{MontoGarantia}", montoGarantia)
-                                    .Replace("{montoGarantia}", montoGarantia)
-                                    .Replace("{MontoPagare}", montoPagare)
-                                    .Replace("{montoPagare}", montoPagare)
-                                    .Replace("{FechaFirma}", fechaFirma)
-                                    .Replace("{fechaFirma}", fechaFirma)
-                                    .Replace("{FechaEntrega}", fechaEntrega)
-                                    .Replace("{fechaEntrega}", fechaEntrega)
-                                    .Replace("{FechaInicio}", fechaInicio)
-                                    .Replace("{fechaInicio}", fechaInicio)
-                                    .Replace("{FechaFin}", fechaFin)
-                                    .Replace("{fechaFin}", fechaFin)
-                                    .Replace("{DuracionMeses}", duracionMeses)
-                                    .Replace("{duracionMeses}", duracionMeses);
-
-                                if (newText != text)
+                                var textNodes = run.Descendants<Text>().ToList();
+                                foreach (var textNode in textNodes)
                                 {
-                                    para.RemoveAllChildren<Run>();
-                                    para.AppendChild(new Run(new Text(newText)));
+                                    foreach (var item in replacer)
+                                    {
+                                        if (textNode.Text.Contains(item.Key, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            textNode.Text = textNode.Text.Replace(item.Key, item.Value, StringComparison.OrdinalIgnoreCase);
+                                        }
+                                    }
                                 }
                             }
                         }
                         wordDoc.MainDocumentPart?.Document.Save();
                     }
                 }
-
                 docBytes = memStream.ToArray();
             }
 
             var downloadName = $"{plantilla.Nombre.Replace(" ", "_")}_{nombreLocatario.Replace(" ", "_")}.docx";
-            return File(docBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", downloadName);
+            return (docBytes, downloadName);
+        }
+
+        [HttpGet("generar/{id}")]
+        public async Task<IActionResult> GenerarDocumento(int id)
+        {
+            var plantilla = await _context.PlantillasDocumento.FindAsync(id);
+            if (plantilla == null) return NotFound();
+
+            var templatePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", plantilla.ArchivoUrl.TrimStart('/'));
+            if (!System.IO.File.Exists(templatePath)) return NotFound();
+
+            byte[] docBytes;
+            using (var memStream = new MemoryStream())
+            {
+                using (var fileStream = new FileStream(templatePath, FileMode.Open, FileAccess.Read))
+                {
+                    await fileStream.CopyToAsync(memStream);
+                }
+
+                memStream.Position = 0;
+                using (var wordDoc = WordprocessingDocument.Open(memStream, true))
+                {
+                    var body = wordDoc.MainDocumentPart.Document.Body;
+
+                    // PASO 1: UNIFICAR CADA PÁRRAFO (Para arreglar etiquetas rotas por Word)
+                    foreach (var para in body.Descendants<Paragraph>())
+                    {
+                        var texts = para.Descendants<Text>().ToList();
+                        if (texts.Count > 1)
+                        {
+                            // Si el párrafo tiene el texto dividido, intentamos unirlo en el primer nodo
+                            // solo si detectamos que hay una etiqueta "{" en el contenido total
+                            string fullText = string.Join("", texts.Select(t => t.Text));
+                            if (fullText.Contains("{"))
+                            {
+                                texts[0].Text = fullText;
+                                for (int i = 1; i < texts.Count; i++) texts[i].Text = "";
+                            }
+                        }
+                    }
+
+                    // PASO 2: REEMPLAZAR USANDO LAS LLAVES ENVIADAS DESDE REACT
+                    foreach (var queryItem in Request.Query)
+                    {
+                        // Buscamos {Variable} exactamente como viene de la URL
+                        string tag = "{" + queryItem.Key + "}";
+                        string value = queryItem.Value.ToString();
+
+                        foreach (var textNode in body.Descendants<Text>())
+                        {
+                            if (textNode.Text.Contains(tag, StringComparison.OrdinalIgnoreCase))
+                            {
+                                textNode.Text = textNode.Text.Replace(tag, value, StringComparison.OrdinalIgnoreCase);
+                            }
+                        }
+                    }
+                    wordDoc.MainDocumentPart.Document.Save();
+                }
+                docBytes = memStream.ToArray();
+            }
+
+            return File(docBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", $"{plantilla.Nombre}.docx");
+        }
+
+        [HttpGet("generar-doc")]
+        public async Task<IActionResult> GenerarDocumentoCompat([FromQuery] int plantillaId, [FromQuery] int contratoId = 0,
+            [FromQuery] string? locatario = null,
+            [FromQuery] string? cedulaLocatario = null,
+            [FromQuery] string? domicilioLocatario = null,
+            [FromQuery] string? codeudor = null,
+            [FromQuery] string? cedulaCodeudor = null,
+            [FromQuery] string? domicilioCodeudor = null,
+            [FromQuery] string? duplex = null,
+            [FromQuery] decimal montoAlquiler = 0,
+            [FromQuery] decimal montoGarantia = 0,
+            [FromQuery] decimal montoPagare = 0,
+            [FromQuery] string? fechaFirma = null)
+        {
+            var res = await GenerarDocumentoBytes(plantillaId, contratoId, locatario, cedulaLocatario, domicilioLocatario,
+                                                codeudor, cedulaCodeudor, domicilioCodeudor,
+                                                duplex, montoAlquiler, montoGarantia, montoPagare, fechaFirma);
+            if (res.bytes == null || res.bytes.Length == 0)
+                return NotFound("Plantilla no encontrada.");
+
+            return File(res.bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", res.fileName);
+        }
+
+        [HttpGet("generar-zip/{contratoId}")]
+        public async Task<IActionResult> GenerarTodosZip(
+            int contratoId,
+            [FromQuery] string? locatario = null,
+            [FromQuery] string? cedulaLocatario = null,
+            [FromQuery] string? domicilioLocatario = null,
+            [FromQuery] string? codeudor = null,
+            [FromQuery] string? cedulaCodeudor = null,
+            [FromQuery] string? domicilioCodeudor = null,
+            [FromQuery] string? duplex = null,
+            [FromQuery] decimal montoAlquiler = 0,
+            [FromQuery] decimal montoGarantia = 0,
+            [FromQuery] decimal montoPagare = 0,
+            [FromQuery] string? fechaFirma = null)
+        {
+            var plantillas = await _context.PlantillasDocumento.ToListAsync();
+            if (plantillas.Count == 0) return NotFound("No hay plantillas registradas.");
+
+            string nombreLocatario = locatario ?? "Inquilino";
+            if (contratoId > 0)
+            {
+                var c = await _context.ContratosInquilinos.Include(x => x.Inquilino).FirstOrDefaultAsync(x => x.ContratoId == contratoId);
+                if (c != null) nombreLocatario = c.Inquilino?.RazonSocial ?? nombreLocatario;
+            }
+
+            using (var zipMS = new MemoryStream())
+            {
+                using (var zipArchive = new ZipArchive(zipMS, ZipArchiveMode.Create, true))
+                {
+                    foreach (var plantilla in plantillas)
+                    {
+                        // ESTA ES LA LÍNEA QUE DEBÍAS CORREGIR:
+                        var (bytes, fileName) = await GenerarDocumentoBytes(
+                            plantilla.PlantillaId,
+                            contratoId,
+                            locatario,
+                            cedulaLocatario,
+                            domicilioLocatario,
+                            codeudor,
+                            cedulaCodeudor,
+                            domicilioCodeudor,
+                            duplex,
+                            montoAlquiler,
+                            montoGarantia,
+                            montoPagare,
+                            fechaFirma);
+
+                        if (bytes != null && bytes.Length > 0)
+                        {
+                            var zipEntry = zipArchive.CreateEntry(fileName, CompressionLevel.Optimal);
+                            using (var entryStream = zipEntry.Open())
+                            {
+                                await entryStream.WriteAsync(bytes, 0, bytes.Length);
+                            }
+                        }
+                    }
+                }
+
+                zipMS.Position = 0;
+                var zipBytes = zipMS.ToArray();
+                var zipName = $"Documentos_Alquiler_{nombreLocatario.Replace(" ", "_")}.zip";
+                return File(zipBytes, "application/zip", zipName);
+            }
         }
 
         public class CreatePlantillaRequest

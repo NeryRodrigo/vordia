@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -37,6 +37,10 @@ namespace Gesco.Domain.Entities
         public string? Observaciones { get; set; }
         public string? ServiciosIncluidos { get; set; }
         public bool EstaActivo { get; set; } = true;
+
+        // "Ocupado" = inquilino activo en dúplex, "Temporal" = desalojo temporal con intención de renovar, "Definitivo" = desalojo irreversible
+        [StringLength(50)]
+        public string EstadoHistorico { get; set; } = "Ocupado";
 
         public virtual ICollection<PagoRecibo> Pagos { get; set; } = new List<PagoRecibo>();
     }

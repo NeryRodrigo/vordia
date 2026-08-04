@@ -1217,8 +1217,8 @@ namespace Gesco.Application.Services
         {
             try
             {
-                var fromAddress = new MailAddress("sistema-oima@tuempresa.com", "GESCO Real Estate");
-                var toAddress = new MailAddress("broker@tuempresa.com", "Broker GESCO");
+                var fromAddress = new MailAddress("sistema-oima@tuempresa.com", "Vordia");
+                var toAddress = new MailAddress("broker@tuempresa.com", "Broker Vordia");
                 const string fromPassword = "tu_password_aqui";
                 string subject = "ðŸš¨ Nueva Captación Pendiente de Aprobación";
                 string body = $@"

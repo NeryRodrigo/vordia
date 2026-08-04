@@ -33,7 +33,7 @@ namespace Gesco.Application.Services
             {
                 var smtpServer = _config["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
                 var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
-                var senderName = _config["EmailSettings:SenderName"] ?? "Gesco Real Estate";
+                var senderName = _config["EmailSettings:SenderName"] ?? "Fontana - Administración";
                 var senderEmail = _config["EmailSettings:SenderEmail"];
                 var appPassword = _config["EmailSettings:AppPassword"];
 
@@ -81,7 +81,7 @@ namespace Gesco.Application.Services
             return $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;'>
                 <div style='text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px;'>
-                    <h1 style='color: #0f172a; margin: 0; font-size: 24px; font-weight: 900;'>GESCO REAL ESTATE</h1>
+                    <h1 style='color: #0f172a; margin: 0; font-size: 24px; font-weight: 900;'>VORDIA</h1>
                     <p style='color: #64748b; margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;'>Gestión de Alquileres y Administración</p>
                 </div>
                 <h2 style='color: #0f172a; font-size: 18px; margin-top: 0;'>¡Hola, {nombreCliente}!</h2>
@@ -108,7 +108,7 @@ namespace Gesco.Application.Services
                     Si tienes alguna duda o consulta con respecto a este comprobante, puedes responder directamente a este correo o contactar con administración.
                 </p>
                 <div style='border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 11px; color: #94a3b8;'>
-                    <p style='margin: 0;'>Gesco Real Estate — Administración Inmobiliaria</p>
+                    <p style='margin: 0;'>Vordia — Administración Inmobiliaria</p>
                     <p style='margin: 4px 0 0 0;'>Luque, Paraguay</p>
                 </div>
             </div>";
@@ -127,7 +127,7 @@ namespace Gesco.Application.Services
             {
                 var smtpServer = _config["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
                 var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
-                var senderName = _config["EmailSettings:SenderName"] ?? "Gesco Real Estate";
+                var senderName = _config["EmailSettings:SenderName"] ?? "Fontana - Administración";
                 var senderEmail = _config["EmailSettings:SenderEmail"];
                 var appPassword = _config["EmailSettings:AppPassword"];
 
@@ -146,7 +146,7 @@ namespace Gesco.Application.Services
                 }
 
                 // Copia/Alerta para el Administrador del Sistema
-                message.Bcc.Add(new MailAddress(senderEmail, "Gesco Administrador"));
+                message.Bcc.Add(new MailAddress(senderEmail, "Vordia Administrador"));
 
                 var diasTexto = diasRestantes == 0 ? "HOY" : $"en {diasRestantes} días";
                 message.Subject = diasRestantes == 0
@@ -181,7 +181,7 @@ namespace Gesco.Application.Services
             return $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
                 <div style='text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px;'>
-                    <h2 style='color: #0f172a; margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;'>GESCO REAL ESTATE</h2>
+                    <h2 style='color: #0f172a; margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;'>VORDIA</h2>
                     <p style='color: #64748b; margin: 4px 0 0 0; font-size: 13px; text-transform: uppercase; font-weight: 600;'>Alerta Automática de Vencimiento de Alquiler</p>
                 </div>
                 
@@ -224,7 +224,7 @@ namespace Gesco.Application.Services
                     Si ya realizó el pago en las últimas horas, por favor ignore este mensaje automatizado.
                 </p>
                 <div style='border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 11px; color: #94a3b8;'>
-                    <p style='margin: 0;'>Gesco Real Estate — Administración Inmobiliaria</p>
+                    <p style='margin: 0;'>Vordia — Administración Inmobiliaria</p>
                     <p style='margin: 4px 0 0 0;'>Luque, Paraguay</p>
                 </div>
             </div>";
