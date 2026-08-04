@@ -119,7 +119,49 @@ namespace Gesco.API.Controllers
         [HttpGet("historico")]
         public async Task<IActionResult> GetContratosHistoricos()
         {
-            var result = await _contratoService.GetAllContratosHistoricosAsync();
+            var contratos = await _contratoService.GetAllContratosConEstadoAsync();
+
+            // Obtener IDs de inquilinos con morosidades pendientes
+            var inquilinosMorosos = await _context.MorosidadesInquilino
+                .Where(m => m.Estado != "Pagado")
+                .Select(m => m.InquilinoId)
+                .Distinct()
+                .ToListAsync();
+
+            var result = contratos.Select(c => new
+            {
+                c.ContratoId,
+                c.UnidadId,
+                c.InquilinoId,
+                c.FechaIngreso,
+                c.FechaInicioContrato,
+                c.FechaFinContrato,
+                c.MontoMensualAlquiler,
+                c.DepositoGarantia,
+                c.CantidadOcupantes,
+                c.VehiculoInfo,
+                c.Observaciones,
+                c.ServiciosIncluidos,
+                c.EstaActivo,
+                c.EstadoHistorico,
+                esMoroso = inquilinosMorosos.Contains(c.InquilinoId),
+                inquilino = c.Inquilino != null ? new
+                {
+                    c.Inquilino.PersonaId,
+                    c.Inquilino.RazonSocial,
+                    c.Inquilino.Documento,
+                    c.Inquilino.Telefono,
+                    c.Inquilino.Email
+                } : null,
+                unidad = c.Unidad != null ? new
+                {
+                    c.Unidad.UnidadId,
+                    c.Unidad.NombreCondominio,
+                    c.Unidad.CodigoUnidad,
+                    c.Unidad.Estado
+                } : null
+            });
+
             return Ok(result);
         }
 
@@ -204,14 +246,22 @@ namespace Gesco.API.Controllers
         public async Task<IActionResult> AnularDesalojo(int id)
         {
             var result = await _contratoService.AnularDesalojoAsync(id);
-            if (!result) return NotFound(new { success = false, message = "Contrato no encontrado o no se pudo anular el desalojo" });
+            if (!result) return NotFound(new { success = false, message = "Contrato no encontrado, no se pudo anular el desalojo, o el estado es Definitivo (irreversible)" });
             return Ok(new { success = true, message = "Desalojo anulado y unidad restablecida exitosamente" });
+        }
+
+        [HttpPost("{id}/desalojo-definitivo")]
+        public async Task<IActionResult> DesalojoDefinitivo(int id)
+        {
+            var result = await _contratoService.DesalojoDefinitivoAsync(id);
+            if (!result) return NotFound(new { success = false, message = "Contrato no encontrado o no se pudo marcar como definitivo" });
+            return Ok(new { success = true, message = "El contrato ha sido marcado como desalojo DEFINITIVO. Este cambio es irreversible." });
         }
 
         [HttpPost("unidad/{unidadId}/anular-desalojo")]
         public async Task<IActionResult> AnularDesalojoPorUnidad(int unidadId)
         {
-            var historicos = await _contratoService.GetContratosHistoricosByUnidadAsync(unidadId);
+            /*var historicos = await _contratoService.GetContratosHistoricosByUnidadAsync(unidadId);
             var ultimoDesalojado = historicos.OrderByDescending(c => c.FechaFinContrato).FirstOrDefault();
             if (ultimoDesalojado == null)
             {
@@ -226,7 +276,36 @@ namespace Gesco.API.Controllers
 
             var result = await _contratoService.AnularDesalojoAsync(ultimoDesalojado.ContratoId);
             if (!result) return NotFound(new { success = false, message = "No se pudo anular el desalojo" });
-            return Ok(new { success = true, message = "Desalojo/Renovación anulado y unidad restablecida exitosamente" });
+            return Ok(new { success = true, message = "Desalojo/Renovación anulado y unidad restablecida exitosamente" });*/
+            // 1. Buscamos el contrato para saber quién es el inquilino
+            var historicos = await _contratoService.GetContratosHistoricosByUnidadAsync(unidadId);
+            var ultimo = historicos.OrderByDescending(c => c.FechaFinContrato).FirstOrDefault();
+
+            if (ultimo == null) return NotFound(new { success = false, message = "No se encontró contrato" });
+
+            // 2. Ejecutamos la anulación normal del contrato (lo que ya tenías)
+            var result = await _contratoService.AnularDesalojoAsync(ultimo.ContratoId);
+
+            if (result)
+            {
+                // 3. ¡LA CLAVE! Borrar las morosidades pendientes generadas por ese desalojo
+                // Buscamos deudas de este inquilino en esta unidad que NO estén pagadas
+                var morosidadesPrueba = await _context.MorosidadesInquilino
+                    .Where(m => m.UnidadId == unidadId
+                           && m.InquilinoId == ultimo.InquilinoId
+                           && m.Estado != "Pagado")
+                    .ToListAsync();
+
+                if (morosidadesPrueba.Any())
+                {
+                    _context.MorosidadesInquilino.RemoveRange(morosidadesPrueba);
+                    await _context.SaveChangesAsync();
+                }
+
+                return Ok(new { success = true, message = "Desalojo anulado y deudas de prueba eliminadas." });
+            }
+
+            return BadRequest(new { success = false, message = "No se pudo anular" });
         }
 
         [HttpPost("enviar-comprobante")]

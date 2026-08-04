@@ -263,14 +263,27 @@ namespace Gesco.Application.Services
                 .Where(m => m.Estado != "Pagado" && m.Unidad.EmpresaId == empresaId)
                 .ToListAsync();
 
-            dto.Morosos = morosidades.Select(m => new DashboardDetailDto {
+            dto.Morosos = morosidades
+                .GroupBy(m => new { m.UnidadId, m.InquilinoId }) // Agrupamos para no repetir nombres
+                .Select(g => new DashboardDetailDto
+                {
+                    UnidadId = g.Key.UnidadId,
+                    Duplex = g.First().Unidad?.CodigoUnidad ?? "S/D",
+                    Condominio = g.First().Unidad?.NombreCondominio ?? "Aguz",
+                    Inquilino = g.First().Inquilino?.RazonSocial ?? "S/I",
+                    Monto = g.Sum(x => x.SaldoPendiente), // Suma las deudas si hay repetidas
+                    InteresAcumulado = g.Sum(x => x.SaldoPendiente) * 0.10m
+                }).ToList();
+            
+            
+            /*morosidades.Select(m => new DashboardDetailDto {
                 UnidadId = m.UnidadId,
                 Duplex = m.Unidad?.CodigoUnidad ?? "S/D",
                 Condominio = m.Unidad?.NombreCondominio ?? "Aguz",
                 Inquilino = m.Inquilino?.RazonSocial ?? "S/I",
                 Monto = m.SaldoPendiente,
                 InteresAcumulado = m.SaldoPendiente * 0.10m, // Estimación o se puede sacar de base de datos
-            }).ToList();
+            }).ToList();*/
 
             dto.Summary.TotalMorosos = dto.Morosos.Sum(x => x.Monto);
 

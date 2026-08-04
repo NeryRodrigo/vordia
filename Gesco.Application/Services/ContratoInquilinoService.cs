@@ -40,10 +40,13 @@ namespace Gesco.Application.Services
             foreach (var c in contratosAnteriores)
             {
                 c.EstaActivo = false;
+                if (c.EstadoHistorico != "Definitivo")
+                    c.EstadoHistorico = "Temporal";
             }
 
             // 3. Crear el nuevo contrato
             contrato.EstaActivo = true;
+            contrato.EstadoHistorico = "Ocupado";
             _context.ContratosInquilinos.Add(contrato);
 
             // 4. Actualizar el estado de la unidad
@@ -194,9 +197,13 @@ namespace Gesco.Application.Services
 
             if (dbContrato == null) return false;
 
-            // Finalizar contrato
+            // No permitir cambios si ya es definitivo
+            if (dbContrato.EstadoHistorico == "Definitivo") return false;
+
+            // Finalizar contrato como temporal (con intención de renovar)
             dbContrato.EstaActivo = false;
             dbContrato.FechaFinContrato = DateTime.Now;
+            dbContrato.EstadoHistorico = "Temporal";
 
             // Liberar unidad
             if (dbContrato.Unidad != null)
@@ -215,6 +222,9 @@ namespace Gesco.Application.Services
                 .FirstOrDefaultAsync(c => c.ContratoId == contratoId);
 
             if (dbContrato == null) return false;
+
+            // No permitir anular si el estado es Definitivo (irreversible)
+            if (dbContrato.EstadoHistorico == "Definitivo") return false;
 
             // Si hay otros contratos posteriores o activos para esta unidad (ej: por una renovación que se está anulando), reasignamos sus pagos y los eliminamos
             var contratosPosteriores = await _context.ContratosInquilinos
@@ -236,6 +246,7 @@ namespace Gesco.Application.Services
 
             // Restablecer contrato como activo
             dbContrato.EstaActivo = true;
+            dbContrato.EstadoHistorico = "Ocupado";
 
             // Si la fecha de inicio es posterior al 1 de enero del año actual (ej. creado por renovación en el mismo año), restablecer al 1 de enero
             if (dbContrato.FechaInicioContrato.Year == DateTime.Now.Year && dbContrato.FechaInicioContrato.Month > 1)
@@ -270,6 +281,49 @@ namespace Gesco.Application.Services
 
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<bool> DesalojoDefinitivoAsync(int contratoId)
+        {
+            var dbContrato = await _context.ContratosInquilinos
+                .Include(c => c.Unidad)
+                .FirstOrDefaultAsync(c => c.ContratoId == contratoId);
+
+            if (dbContrato == null) return false;
+
+            // Si ya es definitivo, no hacemos nada
+            if (dbContrato.EstadoHistorico == "Definitivo") return true;
+
+            // Marcar como definitivo e irreversible
+            dbContrato.EstaActivo = false;
+            dbContrato.EstadoHistorico = "Definitivo";
+            if (dbContrato.FechaFinContrato > DateTime.Now)
+                dbContrato.FechaFinContrato = DateTime.Now;
+
+            // Liberar unidad si aún la tenía
+            if (dbContrato.Unidad != null && dbContrato.Unidad.Estado == "Ocupado")
+            {
+                // Verificar que no haya otro contrato activo para la misma unidad
+                var otroActivo = await _context.ContratosInquilinos
+                    .AnyAsync(c => c.UnidadId == dbContrato.UnidadId && c.ContratoId != contratoId && c.EstaActivo);
+                if (!otroActivo)
+                {
+                    dbContrato.Unidad.Estado = "Disponible";
+                }
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<IEnumerable<ContratoInquilino>> GetAllContratosConEstadoAsync()
+        {
+            return await _context.ContratosInquilinos
+                .Include(c => c.Inquilino)
+                .Include(c => c.Unidad)
+                .Include(c => c.Pagos)
+                .OrderByDescending(c => c.ContratoId)
+                .ToListAsync();
         }
     }
 }

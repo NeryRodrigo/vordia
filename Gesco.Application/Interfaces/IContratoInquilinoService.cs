@@ -18,5 +18,7 @@ namespace Gesco.Application.Interfaces
         Task<bool> UpdatePagoComprobanteAsync(int pagoId, bool facturaEmitida, string? numeroFactura, string? comprobanteUrl);
         Task<bool> DesalojarUnidadAsync(int contratoId);
         Task<bool> AnularDesalojoAsync(int contratoId);
+        Task<bool> DesalojoDefinitivoAsync(int contratoId);
+        Task<IEnumerable<ContratoInquilino>> GetAllContratosConEstadoAsync();
     }
 }

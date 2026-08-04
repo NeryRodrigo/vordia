@@ -370,6 +370,11 @@ namespace Gesco.Infrastructure.Migrations
                     b.Property<bool>("EstaActivo")
                         .HasColumnType("bit");
 
+                    b.Property<string>("EstadoHistorico")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("FechaFinContrato")
                         .HasColumnType("datetime2");
 
