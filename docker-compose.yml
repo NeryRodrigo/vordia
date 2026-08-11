@@ -26,14 +26,26 @@ services:
 
   frontend:
     build:
-      context: ./gesco-web # <--- Asegúrate que coincida con el nombre de tu carpeta
+      context: ./gesco-web # <--- Asegrate que coincida con el nombre de tu carpeta
     container_name: gesco-web
     environment:
-      - NEXT_PUBLIC_API_URL=http://34.59.84.173:8080 # Tu IP de Google Cloud
+      - NEXT_PUBLIC_API_URL:"http://vordia-aguz.duckdns.org:8080" # Tu IP de Google Cloud
     ports:
-      - "80:3000" # Mapeamos el puerto 80 del exterior al 3000 de Next.js
+      - "3000:3000" # Mapeamos el puerto 80 del exterior al 3000 de Next.js
     depends_on:
       - backend
+
+  nginx-proxy:
+    image: 'jc21/nginx-proxy-manager:latest'
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - '80:80' # Puerto para trÃ¡fico normal
+      - '443:443' # Puerto para HTTPS (CANDADITO)
+      - '81:81' # Panel de control de certificados
+    volumes:
+      - ./data/nginx:/data
+      - ./data/letsencrypt:/etc/letsencrypt
 
 volumes:
   sql_data:

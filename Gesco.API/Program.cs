@@ -78,6 +78,7 @@ builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequir
 
 var app = builder.Build();
 
+app.UseCors("GescoPolicy");
 
 if (app.Environment.IsDevelopment())
 {
@@ -85,7 +86,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("GescoPolicy");
 app.UseStaticFiles();
 app.UseResponseCompression();
 app.UseHttpsRedirection();
