@@ -225,36 +225,30 @@ namespace Gesco.Application.Services
             }
             dto.Summary.FaltaCobrar = dto.FaltaCobrar.Sum(x => x.MontoRestante ?? 0);
 
-            // Vencimientos: Inquilinos con pago vencido este mes
-            foreach (var u in ocupados)
-            {
-                var c = u.Contratos.FirstOrDefault();
-                if (c != null)
+            // Finalización de contratos: todos los dúplex ocupados con FechaFinContrato de la ficha
+            dto.Vencimientos = ocupados
+                .Select(u =>
                 {
-                    // Asumimos vencimiento el día 5 del mes si no está especificado
-                    int diaVencimiento = c.FechaInicioContrato.Day <= 28 ? c.FechaInicioContrato.Day : 5;
-                    if (diaVencimiento < 1 || diaVencimiento > 28) diaVencimiento = 5;
-                    var fechaVencimiento = new DateTime(currentYear, currentMonth, diaVencimiento);
-
-                    if (now.Date > fechaVencimiento.Date)
+                    var c = u.Contratos.FirstOrDefault();
+                    if (c == null) return null;
+                    return new DashboardDetailDto
                     {
-                        decimal montoPagado = c.Pagos.Where(p => p.FechaPago.Month == currentMonth && p.FechaPago.Year == currentYear && (p.TipoPago == "Alquiler" || string.IsNullOrEmpty(p.TipoPago))).Sum(p => p.MontoPagado);
-                        decimal falta = c.MontoMensualAlquiler - montoPagado;
-                        if (falta > 0)
-                        {
-                            dto.Vencimientos.Add(new DashboardDetailDto {
-                                UnidadId = u.UnidadId,
-                                Duplex = u.CodigoUnidad ?? "S/D",
-                                Condominio = u.NombreCondominio ?? "Aguz",
-                                Inquilino = c.Inquilino?.RazonSocial ?? "S/I",
-                                Monto = falta,
-                                Fecha = fechaVencimiento
-                            });
-                        }
-                    }
-                }
-            }
-            dto.Summary.TotalVencimientos = dto.Vencimientos.Sum(x => x.Monto);
+                        UnidadId = u.UnidadId,
+                        Duplex = u.CodigoUnidad ?? "S/D",
+                        Condominio = u.NombreCondominio ?? "Aguz",
+                        Inquilino = c.Inquilino?.RazonSocial ?? "S/I",
+                        Cedula = c.Inquilino?.Documento ?? "N/A",
+                        Monto = c.MontoMensualAlquiler,
+                        Fecha = c.FechaFinContrato.Date
+                    };
+                })
+                .Where(x => x != null)
+                .Cast<DashboardDetailDto>()
+                .OrderBy(x => x.Fecha)
+                .ThenBy(x => x.Condominio)
+                .ThenBy(x => x.Duplex)
+                .ToList();
+            dto.Summary.TotalVencimientos = dto.Vencimientos.Count;
 
             // Morosos: Desalojados con saldos arrastrados
             var morosidades = await _context.MorosidadesInquilino
@@ -265,14 +259,19 @@ namespace Gesco.Application.Services
 
             dto.Morosos = morosidades
                 .GroupBy(m => new { m.UnidadId, m.InquilinoId }) // Agrupamos para no repetir nombres
-                .Select(g => new DashboardDetailDto
+                .Select(g =>
                 {
-                    UnidadId = g.Key.UnidadId,
-                    Duplex = g.First().Unidad?.CodigoUnidad ?? "S/D",
-                    Condominio = g.First().Unidad?.NombreCondominio ?? "Aguz",
-                    Inquilino = g.First().Inquilino?.RazonSocial ?? "S/I",
-                    Monto = g.Sum(x => x.SaldoPendiente), // Suma las deudas si hay repetidas
-                    InteresAcumulado = g.Sum(x => x.SaldoPendiente) * 0.10m
+                    var principal = g.OrderByDescending(x => x.SaldoPendiente).First();
+                    return new DashboardDetailDto
+                    {
+                        UnidadId = g.Key.UnidadId,
+                        Duplex = principal.Unidad?.CodigoUnidad ?? "S/D",
+                        Condominio = principal.Unidad?.NombreCondominio ?? "Aguz",
+                        Inquilino = principal.Inquilino?.RazonSocial ?? "S/I",
+                        Monto = g.Sum(x => x.SaldoPendiente),
+                        InteresAcumulado = g.Sum(x => x.SaldoPendiente) * 0.10m,
+                        MorosidadId = principal.MorosidadId
+                    };
                 }).ToList();
             
             

@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Mail;
 using System.Net.Mime;
+using System.Text;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using Gesco.Application.Interfaces;
@@ -45,17 +47,18 @@ namespace Gesco.Application.Services
                 var fromAddress = new MailAddress(senderEmail, senderName);
                 var toAddress = new MailAddress(emailDestino, nombreCliente);
 
+                var tipoLabel = NormalizarTipoEmision(tipoEmision);
                 using var message = new MailMessage(fromAddress, toAddress)
                 {
-                    Subject = $"Comprobante de Pago N° {numeroComprobante} - {senderName}",
+                    Subject = $"{tipoLabel} N° {numeroComprobante} - {senderName}",
                     IsBodyHtml = true,
-                    Body = GetHtmlBody(nombreCliente, numeroComprobante, tipoEmision, monto, concepto)
+                    Body = GetHtmlBody(nombreCliente, numeroComprobante, tipoLabel, monto, concepto)
                 };
 
                 if (pdfAdjunto != null && pdfAdjunto.Length > 0)
                 {
                     var stream = new MemoryStream(pdfAdjunto);
-                    var attachment = new Attachment(stream, $"Comprobante_{numeroComprobante}.pdf", MediaTypeNames.Application.Pdf);
+                    var attachment = new Attachment(stream, $"{tipoLabel}_{numeroComprobante}.pdf", MediaTypeNames.Application.Pdf);
                     message.Attachments.Add(attachment);
                 }
 
@@ -75,9 +78,16 @@ namespace Gesco.Application.Services
             }
         }
 
+        private static string NormalizarTipoEmision(string? tipoEmision)
+        {
+            if (string.IsNullOrWhiteSpace(tipoEmision)) return "FACTURA";
+            return tipoEmision.ToUpperInvariant().Contains("FACTURA") ? "FACTURA" : "RECIBO";
+        }
+
         private string GetHtmlBody(string nombreCliente, string numeroComprobante, string tipoEmision, decimal monto, string concepto)
         {
             var montoStr = monto.ToString("N0", new System.Globalization.CultureInfo("es-PY"));
+            var tipoLabel = NormalizarTipoEmision(tipoEmision);
             return $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;'>
                 <div style='text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px;'>
@@ -86,7 +96,7 @@ namespace Gesco.Application.Services
                 </div>
                 <h2 style='color: #0f172a; font-size: 18px; margin-top: 0;'>¡Hola, {nombreCliente}!</h2>
                 <p style='font-size: 14px; line-height: 1.6; color: #475569;'>
-                    Adjunto a este correo te enviamos el <strong>{tipoEmision}</strong> correspondiente a tu pago registrado en nuestro sistema.
+                    Adjunto a este correo te enviamos el <strong>{tipoLabel}</strong> correspondiente a tu pago registrado en nuestro sistema.
                 </p>
                 <div style='background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;'>
                     <table style='width: 100%; font-size: 13px; border-collapse: collapse;'>
@@ -136,7 +146,7 @@ namespace Gesco.Application.Services
                     throw new Exception("No están configuradas las credenciales SMTP en appsettings.json.");
                 }
 
-                var message = new MailMessage();
+                using var message = new MailMessage();
                 message.From = new MailAddress(senderEmail, senderName);
 
                 // Destinatario principal: Inquilino (si tiene email válido)
@@ -154,7 +164,11 @@ namespace Gesco.Application.Services
                     : $"⚠️ ALERTA: Cuota de Alquiler vence {diasTexto} ({fechaVencimiento:dd/MM/yyyy}) — {nombreUnidad}";
 
                 message.IsBodyHtml = true;
-                message.Body = GenerateAlertaVencimientoHtml(nombreInquilino, nombreUnidad, montoMensual, fechaVencimiento, diasRestantes);
+                var html = GenerateAlertaVencimientoHtml(nombreInquilino, nombreUnidad, montoMensual, fechaVencimiento, diasRestantes);
+                var htmlView = AlternateView.CreateAlternateViewFromString(html, Encoding.UTF8, MediaTypeNames.Text.Html);
+                AdjuntarLogoEmail(htmlView, "fontanas.png", "fontanaLogo");
+                AdjuntarLogoEmail(htmlView, "VORDIA H NEGRO.png", "vordiaLogo");
+                message.AlternateViews.Add(htmlView);
 
                 using var smtpClient = new SmtpClient(smtpServer, smtpPort)
                 {
@@ -172,19 +186,67 @@ namespace Gesco.Application.Services
             }
         }
 
+        /// <summary>
+        /// Resuelve logos en wwwroot/email (misma convención que plantillas del API).
+        /// </summary>
+        private static string? ResolverRutaLogoEmail(string fileName)
+        {
+            var candidates = new[]
+            {
+                Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "email", fileName),
+                Path.Combine(AppContext.BaseDirectory, "wwwroot", "email", fileName),
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "wwwroot", "email", fileName),
+            };
+
+            return candidates.Select(Path.GetFullPath).FirstOrDefault(File.Exists);
+        }
+
+        private static void AdjuntarLogoEmail(AlternateView view, string fileName, string contentId)
+        {
+            var path = ResolverRutaLogoEmail(fileName);
+            if (path == null) return;
+
+            var resource = new LinkedResource(path, "image/png")
+            {
+                ContentId = contentId,
+                TransferEncoding = TransferEncoding.Base64,
+                ContentType = { Name = fileName }
+            };
+            view.LinkedResources.Add(resource);
+        }
+
         private string GenerateAlertaVencimientoHtml(string nombreInquilino, string nombreUnidad, decimal montoMensual, DateTime fechaVencimiento, int diasRestantes)
         {
             var montoStr = montoMensual.ToString("N0", new System.Globalization.CultureInfo("es-PY"));
             var badgeColor = diasRestantes == 0 ? "#dc2626" : "#f59e0b";
-            var badgeText = diasRestantes == 0 ? "VENCE HOY" : $"VENCE EN {diasRestantes} DÍAS";
+            var badgeText = diasRestantes == 0
+                ? "VENCE HOY"
+                : diasRestantes == 1
+                    ? "VENCE EN 1 DÍA"
+                    : $"VENCE EN {diasRestantes} DÍAS";
+
+            // Color del sidebar del sistema (#080E1E) para que fontanas.png (sin fondo) se vea igual que en la app
+            const string colorFondoApp = "#080E1E";
 
             return $@"
-            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
-                <div style='text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px;'>
-                    <h2 style='color: #0f172a; margin: 0; font-size: 22px; font-weight: 900; letter-spacing: -0.5px;'>VORDIA</h2>
-                    <p style='color: #64748b; margin: 4px 0 0 0; font-size: 13px; text-transform: uppercase; font-weight: 600;'>Alerta Automática de Vencimiento de Alquiler</p>
-                </div>
-                
+            <div style='font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;'>
+                <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='border-collapse: collapse; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; margin-bottom: 24px;'>
+                    <tr>
+                        <td width='72' valign='middle' style='padding: 0 12px 16px 0;'>
+                            <table role='presentation' cellpadding='0' cellspacing='0' style='border-collapse: collapse;'>
+                                <tr>
+                                    <td bgcolor='{colorFondoApp}' style='background-color: {colorFondoApp}; border-radius: 8px; padding: 8px; width: 64px; height: 64px; text-align: center;'>
+                                        <img src='cid:fontanaLogo' alt='Fontana' width='48' height='48' style='display: block; margin: 0 auto; border: 0; outline: none; max-width: 48px; height: auto;' />
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td align='left' valign='middle' style='padding: 0 0 16px 0;'>
+                            <p style='color: #3b82f6; margin: 0; font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; line-height: 1.4;'>Alerta Automática de Vencimiento de Alquiler</p>
+                        </td>
+                    </tr>
+                </table>
+
                 <div style='margin-bottom: 24px;'>
                     <span style='display: inline-block; background-color: {badgeColor}; color: #ffffff; font-size: 11px; font-weight: bold; padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.5px;'>
                         {badgeText}
@@ -223,10 +285,16 @@ namespace Gesco.Application.Services
                 <p style='font-size: 13px; color: #64748b; margin-top: 24px;'>
                     Si ya realizó el pago en las últimas horas, por favor ignore este mensaje automatizado.
                 </p>
-                <div style='border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 11px; color: #94a3b8;'>
-                    <p style='margin: 0;'>Vordia — Administración Inmobiliaria</p>
-                    <p style='margin: 4px 0 0 0;'>Luque, Paraguay</p>
-                </div>
+                <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='border-collapse: collapse; border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px;'>
+                    <tr>
+                        <td align='left' valign='middle' style='padding-top: 16px; font-size: 11px; color: #94a3b8;'>
+                            <p style='margin: 0;'>Vordia — Administración Inmobiliaria</p>
+                        </td>
+                        <td align='right' valign='middle' style='padding-top: 16px;'>
+                            <img src='cid:vordiaLogo' alt='Vordia' width='140' style='display: inline-block; border: 0; outline: none; max-width: 140px; height: auto;' />
+                        </td>
+                    </tr>
+                </table>
             </div>";
         }
 

@@ -65,8 +65,16 @@ builder.Services.AddScoped<IMorosidadService, MorosidadService>();
 builder.Services.AddScoped<DataIntelligenceService>();
 builder.Services.AddScoped<IActividadService, ActividadService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
-builder.Services.AddHttpClient<IAndeScrapingService, AndeScrapingService>();
-builder.Services.AddHostedService<Gesco.API.BackgroundServices.AndeSyncBackgroundService>();
+builder.Services.AddHttpClient<IAndeScrapingService, AndeScrapingService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(180);
+    client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+});
+builder.Services.AddHttpClient<IAndeJwtConsultaService, AndeJwtConsultaService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(90);
+});
+// AndeSyncBackgroundService desactivado: Chrome/ANDE solo al consultar saldo desde Gesco (bajo demanda).
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.AlquilerAlertasBackgroundService>();
 
 builder.Services.AddDbContext<GescoDbContext>(options =>

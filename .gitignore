@@ -361,3 +361,6 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Diagnosticos locales ANDE (probes / dumps - no van al servidor)
+_ande_diag/
+_ande_diag2/

@@ -24,24 +24,13 @@ namespace Gesco.API.BackgroundServices
             _scopeFactory = scopeFactory;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("AndeBot: Iniciando sincronizador de red ANDE.");
-
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    await ProcessAndeSyncAsync();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "AndeBot: Error sincronizando pagos ANDE.");
-                }
-
-                // Ciclo cada 1 minuto
-                await Task.Delay(TimeSpan.FromSeconds(60), stoppingToken);
-            }
+            // Desactivado a propósito: no abrir Chrome ni consultar ANDE al arrancar el servidor.
+            // La consulta de saldo se hace solo bajo demanda (modal Consultar ANDE en Gesco).
+            _logger.LogInformation(
+                "AndeBot: sync automático desactivado. Chrome/ANDE solo al consultar saldo desde Gesco.");
+            return Task.CompletedTask;
         }
 
         private async Task ProcessAndeSyncAsync()
