@@ -395,7 +395,11 @@ namespace Gesco.API.Controllers
                                 c.Item().AlignCenter().Text("FECHA FIN VIGENCIA: 30/JUNIO/2026").Bold().FontSize(7.5f);
 
                                 c.Item().PaddingTop(12).AlignCenter().Text("RUC: 3389403-5").Bold().FontSize(12);
-                                c.Item().AlignCenter().Text(request.TipoEmision.ToUpper().Contains("FACTURA") ? "FACTURA" : "FACTURA").Bold().FontSize(20);
+                                var tipoTitulo = string.IsNullOrWhiteSpace(request.TipoEmision)
+                                    || request.TipoEmision.ToUpperInvariant().Contains("FACTURA")
+                                    ? "FACTURA"
+                                    : "RECIBO";
+                                c.Item().AlignCenter().Text(tipoTitulo).Bold().FontSize(20);
                                 c.Item().AlignCenter().Text($"Nº {request.NumeroComprobante}").Bold().FontSize(11);
                             });
                         });

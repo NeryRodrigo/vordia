@@ -53,6 +53,7 @@ namespace Gesco.Application.DTOs
         public string EstadoFactura => FacturaEmitida ? "Emitida" : "Pendiente";
         public string TipoPago { get; set; }
         public DateTime? Fecha { get; set; }
+        public int? MorosidadId { get; set; }
         
         public bool AndePagadoEsteMes { get; set; }
         public decimal AndeMontoDeuda { get; set; }

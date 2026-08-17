@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -22,6 +22,17 @@ namespace Gesco.Application.Services
         Task<(decimal Deuda, int Kw)> ConsultarConsumoAsync(string nis);
         Task<byte[]> DescargarFacturaPdfAsync(string nis, string inquilinoNombre, string duplex);
         Task<AndeConsultaResultadoDto> ConsultarEstadoAndeAsync(string nis);
+        /// <summary>Abre Chrome con login ANDE; espera Acceder; minimiza. No consulta NIS.</summary>
+        Task<(bool Ok, string Mensaje, bool YaEstabaLogueado)> AsegurarSesionAsync();
+        /// <summary>PDF oficial vía Chrome del portal (misma sesión del relogin / Consultar Saldos). Null si falla.</summary>
+        Task<byte[]?> DescargarFacturaPdfOficialPortalAsync(
+            string nis,
+            string? pdfUrlCompleta = null,
+            string? secNis = null,
+            string? secRec = null,
+            string? fFact = null,
+            bool electronica = true,
+            string? kwfxToken = null);
     }
 
     public class AndeScrapingService : IAndeScrapingService
@@ -31,7 +42,11 @@ namespace Gesco.Application.Services
         private readonly ILogger<AndeScrapingService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
 
-        public AndeScrapingService(HttpClient httpClient, IConfiguration config, ILogger<AndeScrapingService> logger, IServiceScopeFactory scopeFactory)
+        public AndeScrapingService(
+            HttpClient httpClient,
+            IConfiguration config,
+            ILogger<AndeScrapingService> logger,
+            IServiceScopeFactory scopeFactory)
         {
             _httpClient = httpClient;
             _config = config;
@@ -40,97 +55,1482 @@ namespace Gesco.Application.Services
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
+        private static readonly System.Threading.SemaphoreSlim _portalLock = new(1, 1);
+        private static IBrowser? _sharedBrowser;
+        private static IPage? _sharedPage;
+        private static string? _profileDir;
+        /// <summary>True tras Acceder OK en este proceso; evita pedir login otra vez al consultar NIS.</summary>
+        private static bool _sesionAndeActiva;
+
         public async Task<(decimal Deuda, int Kw)> ConsultarConsumoAsync(string nis)
         {
-            if (string.IsNullOrWhiteSpace(nis) || nis == "N/A" || nis == "SIN NIS" || nis == "—")
+            var consulta = await ConsultarFacturasRealesAsync(nis);
+            if (consulta == null) return (0, 0);
+            return (consulta.SaldoDeuda, consulta.ConsumoKw);
+        }
+
+        /// <summary>
+        /// Consulta facturas reales: login Mi Cuenta manual (Acceder) + sesion Chrome reutilizada.
+        /// </summary>
+        private async Task<AndeConsultaResultadoDto?> ConsultarFacturasRealesAsync(string nis)
+        {
+            if (string.IsNullOrWhiteSpace(nis) || nis == "N/A" || nis == "SIN NIS" || nis == "\u2014")
+                return null;
+
+            string nisLimpio = new string(nis.Where(char.IsDigit).ToArray());
+            if (string.IsNullOrEmpty(nisLimpio)) return null;
+
+            var viaPortal = await ConsultarViaPortalMiAndeAsync(nisLimpio);
+            if (viaPortal != null) return viaPortal;
+
+            var usarLegacy = bool.TryParse(_config["AndeConfig:UsarLegacy"], out var ul) && ul;
+            if (!usarLegacy)
             {
-                return (0, 0);
+                _logger.LogWarning("ANDE portal no devolvio facturas. Legacy desactivado (AndeConfig:UsarLegacy=false).");
+                return null;
             }
 
-            // Intentar conectarse al servicio oficial de consulta en línea / scraping ANDE
-            string url = _config["AndeConfig:ConsultaScrapingUrl"];
-            
+            return await ConsultarViaEndpointLegacyAsync(nisLimpio);
+        }
+
+        private async Task<bool> AbrirConsultaFacturasPublicaAsync(IPage page, string portalUrl)
+        {
+            async Task<bool> TieneConsultaPublicaListaAsync()
+            {
+                try
+                {
+                    return await page.EvaluateFunctionAsync<bool>(@"() => {
+                        const nis = document.querySelector('#in-Factura_Publica_nis');
+                        if (!nis) return false;
+                        // Contenedor visible o al menos el input existe tras cambiarContainer
+                        const visible = !!(nis.offsetParent || (nis.getClientRects && nis.getClientRects().length));
+                        const containerVisible = (() => {
+                          const n = (document.body.innerText||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+                          return /Consulte su Factura|Consulta de Facturas/i.test(n);
+                        })();
+                        return visible || containerVisible;
+                      }");
+                }
+                catch { return false; }
+            }
+
+            async Task SafeGotoAsync(string url)
+            {
+                await page.GoToAsync(url, new NavigationOptions
+                {
+                    WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                    Timeout = 90000
+                });
+                await Task.Delay(3500);
+            }
+
             try
             {
-                if (!string.IsNullOrEmpty(url))
-                {
-                    _logger.LogInformation("Realizando consulta en vivo a página ANDE para NIS: {Nis}", nis);
-                    using var request = new HttpRequestMessage(HttpMethod.Post, url);
-                    request.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) GescoBot/1.0");
-                    var content = new FormUrlEncodedContent(new[]
-                    {
-                        new KeyValuePair<string, string>("nis", nis),
-                        new KeyValuePair<string, string>("accion", "consultar_deuda")
-                    });
-                    request.Content = content;
+                await SafeGotoAsync(portalUrl);
+                var preview = await page.EvaluateFunctionAsync<string>(@"() => ((document.body&&document.body.innerText)||'').replace(/\s+/g,' ').slice(0,250)");
+                _logger.LogInformation("ANDE home preview: {Preview}", preview);
 
-                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(5));
-                    var response = await _httpClient.SendAsync(request, cts.Token);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        var responseString = await response.Content.ReadAsStringAsync();
-                        // Si el servicio externo retorna un JSON o texto con datos reales
-                        if (responseString.Contains("deuda") && responseString.Contains("kw"))
-                        {
-                            _logger.LogInformation("Lectura obtenida exitosamente desde ANDE para NIS {Nis}", nis);
-                        }
-                    }
+                // API oficial del portal SPA (descubierto en DOM):
+                // <a onclick="cambiarContainer('factura_publico')">Consulta de Facturas</a>
+                var opened = await page.EvaluateFunctionAsync<bool>(@"() => {
+                    try {
+                      if (typeof cambiarContainer === 'function') {
+                        cambiarContainer('factura_publico');
+                        return true;
+                      }
+                    } catch (e) {}
+                    const a = document.querySelector(""a[onclick*=factura_publico]"")
+                      || Array.from(document.querySelectorAll('a')).find(e => /Consulta de Facturas/i.test((e.textContent||'').trim()));
+                    if (a) { a.click(); return true; }
+                    return false;
+                  }");
+                _logger.LogInformation("ANDE: cambiarContainer/factura_publico => {Ok}", opened);
+                await Task.Delay(2500);
+
+                if (await TieneConsultaPublicaListaAsync())
+                {
+                    _logger.LogInformation("ANDE: Consulta de Facturas publica lista (#in-Factura_Publica_nis)");
+                    return true;
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Consulta en línea a ANDE tardó o no respondió ({Msg}). Usando cálculo determinístico de consumo por NIS.", ex.Message);
+                _logger.LogWarning("ANDE: fallo abriendo consulta publica ({Msg})", ex.Message);
             }
 
-            var nisLimPIO = new string(nis.Where(char.IsDigit).ToArray());
-            if (nisLimPIO == "3041051")
+            return false;
+        }
+
+        private async Task<bool> CompletarNisYConsultarAsync(IPage page, string nis)
+        {
+            try
             {
-                return (17000000m, 3450);
-            }
+                return await page.EvaluateFunctionAsync<bool>(@"(nis) => {
+                    const setNative = (el, value) => {
+                      if (!el) return false;
+                      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                      try { el.focus(); } catch (e) {}
+                      if (setter) setter.call(el, value); else el.value = value;
+                      el.dispatchEvent(new Event('input', { bubbles: true }));
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                      return true;
+                    };
 
-            if (!int.TryParse(nisLimPIO.Length >= 2 ? nisLimPIO.Substring(nisLimPIO.Length - 2) : "15", out int nisTerm))
+                    try {
+                      if (typeof cambiarContainer === 'function') cambiarContainer('factura_publico');
+                    } catch (e) {}
+
+                    const nisInput = document.querySelector('#in-Factura_Publica_nis');
+                    if (!nisInput) return false;
+                    setNative(nisInput, nis);
+
+                    // ANDE oficial: facturaPublicoComponent.consultar() (requiere sesion Mi Cuenta)
+                    try {
+                      if (window.facturaPublicoComponent && typeof facturaPublicoComponent.consultar === 'function') {
+                        facturaPublicoComponent.consultar();
+                        return true;
+                      }
+                    } catch (e) {}
+
+                    const root = document.querySelector('#container-factura_publico') || document;
+                    const btn = Array.from(root.querySelectorAll('button, a, input[type=submit], input[type=button]'))
+                      .find(el => /consultar/i.test((el.textContent||'') + (el.value||'')));
+                    if (btn) { btn.click(); return true; }
+                    return true;
+                  }", nis);
+            }
+            catch (Exception ex)
             {
-                nisTerm = 15;
+                _logger.LogWarning("ANDE: error al completar NIS ({Msg})", ex.Message);
+                return false;
+            }
+        }
+
+        private async Task<AndeConsultaResultadoDto?> ExtraerResultadoDesdePaginaAsync(IPage page, string nisLimpio)
+        {
+            for (int i = 0; i < 40; i++)
+            {
+                await Task.Delay(1000);
+                try
+                {
+                    var listo = await page.EvaluateFunctionAsync<bool>(@"() => {
+                        const txt = ((document.body && document.body.innerText) || '');
+                        const n = txt.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+                        return /Ultimos Comprobantes/i.test(n) || (/Gs\./i.test(txt) && /(Pagado|Pendiente)/i.test(txt)) || /RUC\s*\/\s*CI/i.test(txt);
+                    }");
+                    if (listo) break;
+                }
+                catch { /* nav */ }
             }
 
-            var baseFee = 85000;
-            // El consumo del dúplex se calcula de forma fija según su NIS para garantizar coherencia exacta cada mes
-            var kw = 160 + ((Math.Abs(nis.GetHashCode()) % 30) * 5);
-            var debt = baseFee + (kw * 450);
+            string? extraccion = null;
+            for (int intento = 0; intento < 5; intento++)
+            {
+                try
+                {
+                    extraccion = await page.EvaluateFunctionAsync<string>(@"() => {
+                        const txt = ((document.body && document.body.innerText) || '').replace(/\u00a0/g, ' ');
+                        const n = txt.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+                        let titular = '';
+                        let documento = '';
+                        let mName = n.match(/(?:Name|Nombre)\s*:?\s*([A-Z][A-Za-z .]{3,80})/i);
+                        if (mName) titular = mName[1].replace(/\s+/g,' ').trim();
+                        if (!titular) {
+                          const after = n.match(/NIS\s*:?\s*\d{5,12}[\s\S]{0,120}?([A-Z]{2,}(?:\s+[A-Z]{2,}){1,5})/);
+                          if (after) titular = after[1].replace(/\s+/g,' ').trim();
+                        }
+                        const mDoc = n.match(/RUC\s*\/\s*CI\s*:?\s*(\d{4,12})/i) || n.match(/(?:RUC|C\.?I\.?)\s*:?\s*(\d{4,12})/i);
+                        if (mDoc) documento = mDoc[1];
+                        let scope = txt;
+                        const idx = n.search(/Ultimos Comprobantes|Historico/i);
+                        if (idx >= 0) scope = txt.slice(idx);
+                        const facturas = [];
+                        const moneyRe = /Gs\.?\s*([\d.]{3,})/gi;
+                        let m;
+                        while ((m = moneyRe.exec(scope)) !== null) {
+                          const windowTxt = scope.slice(m.index, m.index + 280);
+                          const estado = /Pendiente(?:\s+de\s+Pago)?/i.test(windowTxt) ? 'Pendiente de Pago'
+                                       : /Pagado/i.test(windowTxt) ? 'Pagado' : '';
+                          if (!estado) continue;
+                          const em = windowTxt.match(/Emisi[oó]n\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+                          const ve = windowTxt.match(/Vencimiento\s*:?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+                          const raw = (m[1] || '').replace(/\./g,'');
+                          if (!/^\d{4,9}$/.test(raw)) continue;
+                          facturas.push({ monto: m[1], estado, emision: em ? em[1] : '', vencimiento: ve ? ve[1] : '' });
+                        }
+                        return JSON.stringify({ titular, documento, facturas, preview: txt.slice(0, 1200) });
+                    }");
+                    break;
+                }
+                catch { await Task.Delay(1200); }
+            }
 
-            return ((decimal)debt, kw);
+            if (string.IsNullOrWhiteSpace(extraccion)) return null;
+
+            using var docJson = System.Text.Json.JsonDocument.Parse(extraccion);
+            var root = docJson.RootElement;
+            var parsed = new AndeConsultaResultadoDto { Nis = nisLimpio };
+            if (root.TryGetProperty("titular", out var t) && t.GetString() is { Length: > 0 } titular)
+                parsed.Titular = titular;
+            if (root.TryGetProperty("documento", out var d) && d.GetString() is { Length: > 0 } documentoCli)
+                parsed.Documento = documentoCli;
+
+            if (root.TryGetProperty("facturas", out var arr) && arr.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var item in arr.EnumerateArray())
+                {
+                    var montoStr = item.TryGetProperty("monto", out var mo) ? mo.GetString() : null;
+                    if (!decimal.TryParse(LimpiarMonto(montoStr), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var monto) || monto <= 0)
+                        continue;
+                    parsed.Facturas.Add(new AndeFacturaItemDto
+                    {
+                        Monto = monto,
+                        Estado = item.TryGetProperty("estado", out var esEl) ? (esEl.GetString() ?? "") : "",
+                        Emision = item.TryGetProperty("emision", out var em) ? (em.GetString() ?? "") : "",
+                        Vencimiento = item.TryGetProperty("vencimiento", out var ve) ? (ve.GetString() ?? "") : ""
+                    });
+                }
+            }
+
+            parsed.Facturas = parsed.Facturas
+                .GroupBy(f => $"{f.Monto}|{f.Estado}|{f.Emision}|{f.Vencimiento}")
+                .Select(g => g.First())
+                .ToList();
+            parsed.SaldoDeuda = parsed.Facturas.Where(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)).Sum(f => f.Monto);
+            parsed.FacturasPendientes = parsed.Facturas.Count(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase));
+            parsed.Vencimiento = parsed.Facturas.FirstOrDefault(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase))?.Vencimiento
+                ?? parsed.Facturas.FirstOrDefault()?.Vencimiento
+                ?? "";
+            if (string.IsNullOrWhiteSpace(parsed.Titular))
+                parsed.Titular = "TITULAR ANDE";
+
+            if (parsed.Facturas.Count == 0)
+            {
+                try
+                {
+                    var html = await page.GetContentAsync();
+                    var alt = ParseHtmlConsultaAnde(html, nisLimpio);
+                    if (alt != null) return alt;
+                }
+                catch { /* ignore */ }
+                return null;
+            }
+
+            parsed.EsSimulado = false;
+            return parsed;
+        }
+
+        private AndeConsultaResultadoDto? ParseFromCapturedXhr(
+            System.Collections.Concurrent.ConcurrentBag<string> bodies, string nis)
+        {
+            if (bodies.IsEmpty) return null;
+            AndeConsultaResultadoDto? best = null;
+            foreach (var body in bodies)
+            {
+                try
+                {
+                    // HTML embebido en XHR
+                    if (body.Contains("Gs.", StringComparison.OrdinalIgnoreCase)
+                        && (body.Contains("Pagado", StringComparison.OrdinalIgnoreCase)
+                            || body.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var fromHtml = ParseHtmlConsultaAnde(body, nis);
+                        if (fromHtml != null && fromHtml.Facturas.Count > (best?.Facturas.Count ?? 0))
+                            best = fromHtml;
+                    }
+
+                    // JSON con montos
+                    if (!(body.TrimStart().StartsWith("{") || body.TrimStart().StartsWith("[")))
+                        continue;
+
+                    using var doc = System.Text.Json.JsonDocument.Parse(body);
+                    var parsed = new AndeConsultaResultadoDto { Nis = nis };
+                    void Walk(System.Text.Json.JsonElement el, string path)
+                    {
+                        switch (el.ValueKind)
+                        {
+                            case System.Text.Json.JsonValueKind.Object:
+                                decimal? monto = null;
+                                string estado = "", emision = "", venc = "", titular = "", documento = "";
+                                foreach (var p in el.EnumerateObject())
+                                {
+                                    var name = p.Name.ToLowerInvariant();
+                                    if (p.Value.ValueKind == System.Text.Json.JsonValueKind.String
+                                        || p.Value.ValueKind == System.Text.Json.JsonValueKind.Number)
+                                    {
+                                        var s = p.Value.ToString();
+                                        if (name is "titular" or "nombre" or "name" or "cliente")
+                                            titular = s;
+                                        else if (name is "documento" or "ruc" or "ci" or "nro_documento")
+                                            documento = s;
+                                        else if (name.Contains("monto") || name.Contains("importe") || name.Contains("total") || name == "gs")
+                                        {
+                                            if (decimal.TryParse(LimpiarMonto(s), System.Globalization.NumberStyles.Any,
+                                                    System.Globalization.CultureInfo.InvariantCulture, out var m) && m > 0)
+                                                monto = m;
+                                        }
+                                        else if (name.Contains("estado") || name.Contains("situacion"))
+                                            estado = s;
+                                        else if (name.Contains("emision") || name.Contains("fecha_emi"))
+                                            emision = s;
+                                        else if (name.Contains("venc"))
+                                            venc = s;
+                                    }
+                                    else
+                                        Walk(p.Value, path + "." + p.Name);
+                                }
+                                if (monto is > 0 && (estado.Contains("Pagado", StringComparison.OrdinalIgnoreCase)
+                                    || estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)
+                                    || !string.IsNullOrEmpty(emision) || !string.IsNullOrEmpty(venc)))
+                                {
+                                    if (string.IsNullOrEmpty(estado)) estado = "Pendiente de Pago";
+                                    parsed.Facturas.Add(new AndeFacturaItemDto
+                                    {
+                                        Monto = monto.Value,
+                                        Estado = estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase) ? "Pendiente de Pago"
+                                               : estado.Contains("Pagado", StringComparison.OrdinalIgnoreCase) ? "Pagado" : estado,
+                                        Emision = emision,
+                                        Vencimiento = venc
+                                    });
+                                }
+                                if (!string.IsNullOrWhiteSpace(titular) && string.IsNullOrWhiteSpace(parsed.Titular))
+                                    parsed.Titular = titular;
+                                if (!string.IsNullOrWhiteSpace(documento) && string.IsNullOrWhiteSpace(parsed.Documento))
+                                    parsed.Documento = documento;
+                                break;
+                            case System.Text.Json.JsonValueKind.Array:
+                                foreach (var item in el.EnumerateArray()) Walk(item, path);
+                                break;
+                        }
+                    }
+                    Walk(doc.RootElement, "$");
+                    if (parsed.Facturas.Count > (best?.Facturas.Count ?? 0))
+                    {
+                        parsed.Facturas = parsed.Facturas
+                            .GroupBy(f => $"{f.Monto}|{f.Estado}|{f.Emision}|{f.Vencimiento}")
+                            .Select(g => g.First()).ToList();
+                        parsed.SaldoDeuda = parsed.Facturas.Where(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)).Sum(f => f.Monto);
+                        parsed.FacturasPendientes = parsed.Facturas.Count(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase));
+                        parsed.Vencimiento = parsed.Facturas.FirstOrDefault(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase))?.Vencimiento
+                            ?? parsed.Facturas.FirstOrDefault()?.Vencimiento ?? "";
+                        if (string.IsNullOrWhiteSpace(parsed.Titular)) parsed.Titular = "TITULAR ANDE";
+                        parsed.EsSimulado = false;
+                        best = parsed;
+                    }
+                }
+                catch { /* next body */ }
+            }
+            return best;
+        }
+
+        public async Task<(bool Ok, string Mensaje, bool YaEstabaLogueado)> AsegurarSesionAsync()
+        {
+            var documento = _config["AndeConfig:Documento"];
+            var password = _config["AndeConfig:Password"];
+            var tipoDoc = _config["AndeConfig:TipoDocumento"] ?? "C.I. Civil";
+            var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
+
+            await _portalLock.WaitAsync();
+            try
+            {
+                _logger.LogInformation("ANDE: asegurando sesión (login Mi Cuenta)...");
+                var page = await EnsurePortalPageAsync(headless: false);
+
+                try
+                {
+                    await page.GoToAsync(portalUrl, new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                        Timeout = 90000
+                    });
+                    await Task.Delay(2500);
+                }
+                catch (Exception exNav)
+                {
+                    _logger.LogWarning("ANDE: navegación portal falló ({Msg})", exNav.Message);
+                }
+
+                if (await PortalEstaLogueadoAsync(page))
+                {
+                    _sesionAndeActiva = true;
+                    await MinimizeChromeWindowAsync(page);
+                    _logger.LogInformation("ANDE: sesión ya activa — Chrome minimizado.");
+                    return (true, "Sesión ANDE ya activa. Puede consultar el NIS.", true);
+                }
+
+                await RestoreChromeWindowAsync(page);
+
+                if (string.IsNullOrWhiteSpace(documento) || string.IsNullOrWhiteSpace(password))
+                {
+                    return (false, "Faltan credenciales ANDE (AndeConfig:Documento / Password).", false);
+                }
+
+                var formOk = await AbrirFormularioLoginAsync(page, portalUrl);
+                if (!formOk)
+                    return (false, "No se pudo abrir el formulario Mi Cuenta de ANDE.", false);
+
+                await Task.Delay(1500);
+                var filled = await AutocompletarLoginConTecladoAsync(page, tipoDoc, documento, password);
+                if (!filled)
+                    return (false, "No se pudieron cargar CI/contraseña en el formulario ANDE.", false);
+
+                var esperaCfg = int.TryParse(_config["AndeConfig:EsperaLoginSegundos"], out var el) ? el : 300;
+                var esperaLoginSeg = Math.Max(esperaCfg, 180);
+                _logger.LogInformation("ANDE: pantalla login lista — pulse Acceder (hasta {Seg}s)...", esperaLoginSeg);
+
+                var deadline = DateTime.UtcNow.AddSeconds(esperaLoginSeg);
+                while (DateTime.UtcNow < deadline)
+                {
+                    await Task.Delay(2000);
+                    if (await PortalEstaLogueadoAsync(page))
+                    {
+                        _sesionAndeActiva = true;
+                        await MinimizeChromeWindowAsync(page);
+                        _logger.LogInformation("ANDE: Acceder OK — Chrome minimizado, listo para modal NIS.");
+                        return (true, "Login ANDE OK. Ya puede consultar el NIS.", false);
+                    }
+                }
+
+                _sesionAndeActiva = false;
+                return (false, "No se detectó Acceder a tiempo. Complete captcha, pulse Acceder e intente de nuevo.", false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ANDE: error asegurando sesión");
+                return (false, $"Error abriendo login ANDE: {ex.Message}", false);
+            }
+            finally
+            {
+                _portalLock.Release();
+            }
+        }
+
+        private async Task<AndeConsultaResultadoDto?> ConsultarViaPortalMiAndeAsync(string nisLimpio)
+        {
+            var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
+            // Consulta NIS: asume sesión ya asegurada (botón Consultar Saldos). Si caducó, reabre login.
+            var headless = false;
+
+            await _portalLock.WaitAsync();
+            try
+            {
+                _logger.LogInformation("Consultando ANDE portal para NIS {Nis}", nisLimpio);
+                var page = await EnsurePortalPageAsync(headless);
+                var xhrBodies = new System.Collections.Concurrent.ConcurrentBag<string>();
+                void OnResponse(object? _, ResponseCreatedEventArgs e)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var url = (e.Response.Url ?? "").ToLowerInvariant();
+                            if (!(url.Contains("factura") || url.Contains("comprobante") || url.Contains("nis")
+                                  || url.Contains("consulta") || url.Contains("suministro") || url.Contains("ajax")
+                                  || url.Contains("api") || url.Contains("servicio")))
+                                return;
+                            if (!e.Response.Ok) return;
+                            var text = await e.Response.TextAsync();
+                            if (!string.IsNullOrWhiteSpace(text) && text.Length is > 40 and < 2_000_000)
+                                xhrBodies.Add(text);
+                        }
+                        catch { /* ignore body read errors */ }
+                    });
+                }
+                page.Response += OnResponse;
+
+                try
+                {
+                // Si ya hubo Acceder OK: no recargar de golpe ni pedir login otra vez.
+                // Solo asegurar que la sesión esté legible y consultar el NIS.
+                var urlActual = (page.Url ?? "").ToLowerInvariant();
+                var yaEnAnde = urlActual.Contains("ande.gov.py");
+
+                if (!_sesionAndeActiva || !yaEnAnde)
+                {
+                    try
+                    {
+                        await page.GoToAsync(portalUrl, new NavigationOptions
+                        {
+                            WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                            Timeout = 90000
+                        });
+                        await Task.Delay(2500);
+                    }
+                    catch (Exception exNav)
+                    {
+                        _logger.LogWarning("ANDE: navegacion inicial fallo ({Msg})", exNav.Message);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("ANDE: reutilizando página con sesión previa (sin segundo login).");
+                    await Task.Delay(800);
+                }
+
+                var yaLogueado = await EsperarSesionPortalAsync(page, segundosMax: _sesionAndeActiva ? 25 : 8);
+                if (!yaLogueado && _sesionAndeActiva)
+                {
+                    // La sesión del Acceder sigue vigente en memoria/proceso: refrescar home una vez y reintentar.
+                    _logger.LogInformation("ANDE: sesión marcada activa; refrescando portal sin pedir Acceder...");
+                    try
+                    {
+                        await page.GoToAsync(portalUrl, new NavigationOptions
+                        {
+                            WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                            Timeout = 90000
+                        });
+                    }
+                    catch { /* ignore */ }
+                    yaLogueado = await EsperarSesionPortalAsync(page, segundosMax: 30);
+                }
+
+                if (!yaLogueado)
+                {
+                    // Solo si realmente no hay sesión: pedir Acceder (no debería pasar tras AsegurarSesion).
+                    _logger.LogWarning("ANDE: sin sesión real al consultar NIS — se requiere Acceder de nuevo.");
+                    _sesionAndeActiva = false;
+                    var documento = _config["AndeConfig:Documento"];
+                    var password = _config["AndeConfig:Password"];
+                    var tipoDoc = _config["AndeConfig:TipoDocumento"] ?? "C.I. Civil";
+                    await RestoreChromeWindowAsync(page);
+                    if (string.IsNullOrWhiteSpace(documento) || string.IsNullOrWhiteSpace(password))
+                        return null;
+                    if (!await AbrirFormularioLoginAsync(page, portalUrl))
+                        return null;
+                    await Task.Delay(1000);
+                    if (!await AutocompletarLoginConTecladoAsync(page, tipoDoc, documento, password))
+                        return null;
+                    var esperaCfg = int.TryParse(_config["AndeConfig:EsperaLoginSegundos"], out var el) ? el : 300;
+                    var deadline = DateTime.UtcNow.AddSeconds(Math.Max(esperaCfg, 180));
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        await Task.Delay(2000);
+                        if (await PortalEstaLogueadoAsync(page))
+                        {
+                            _sesionAndeActiva = true;
+                            await MinimizeChromeWindowAsync(page);
+                            yaLogueado = true;
+                            break;
+                        }
+                    }
+                    if (!yaLogueado) return null;
+                }
+                else
+                {
+                    _sesionAndeActiva = true;
+                    await MinimizeChromeWindowAsync(page);
+                }
+
+                // Consulta de facturas con sesion
+                try
+                {
+                    await page.EvaluateFunctionAsync(@"() => {
+                        try { if (typeof cambiarContainer==='function') cambiarContainer('factura_publico'); } catch(e) {}
+                        const el = document.querySelector(""a[onclick*='factura_publico']"");
+                        if (el) el.click();
+                    }");
+                }
+                catch { /* ignore */ }
+                await Task.Delay(2000);
+                await CompletarNisYConsultarAsync(page, nisLimpio);
+                await Task.Delay(1500);
+                try
+                {
+                    await page.EvaluateFunctionAsync(@"() => {
+                      try {
+                        if (window.facturaPublicoComponent && typeof facturaPublicoComponent.consultar==='function')
+                          facturaPublicoComponent.consultar();
+                      } catch(e) {}
+                    }");
+                }
+                catch { /* ignore */ }
+
+                var auth = await ExtraerResultadoDesdePaginaAsync(page, nisLimpio)
+                           ?? ParseFromCapturedXhr(xhrBodies, nisLimpio);
+                if (auth != null && auth.Facturas.Count > 0)
+                {
+                    auth.Observaciones = "Montos con sesion ANDE activa (un solo Acceder).";
+                    _logger.LogInformation(
+                        "ANDE OK NIS {Nis}: titular={Titular}, saldo={Saldo}, facturas={Count}",
+                        nisLimpio, auth.Titular, auth.SaldoDeuda, auth.Facturas.Count);
+                    return auth;
+                }
+
+                _logger.LogWarning("ANDE: con sesion pero sin facturas parseables. XHR={Count}", xhrBodies.Count);
+                return null;
+                }
+                finally
+                {
+                    page.Response -= OnResponse;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ANDE portal fallo ({Msg}).", ex.Message);
+                try
+                {
+                    if (_sharedBrowser != null && _sharedBrowser.IsClosed)
+                    {
+                        _sharedBrowser = null;
+                        _sharedPage = null;
+                        _sesionAndeActiva = false;
+                    }
+                }
+                catch { /* ignore */ }
+                return null;
+            }
+            finally
+            {
+                _portalLock.Release();
+            }
+        }
+
+        private static bool? _sharedHeadless;
+
+        private async Task<IPage> EnsurePortalPageAsync(bool headless)
+        {
+            _profileDir ??= Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "Gesco", "ande-chrome-profile");
+            Directory.CreateDirectory(_profileDir);
+
+            var browserAlive = _sharedBrowser != null && !_sharedBrowser.IsClosed;
+            if (browserAlive && _sharedHeadless != headless)
+            {
+                try { await _sharedBrowser!.CloseAsync(); } catch { /* ignore */ }
+                _sharedBrowser = null;
+                _sharedPage = null;
+                _sesionAndeActiva = false;
+                browserAlive = false;
+            }
+
+            if (!browserAlive)
+            {
+                var browserFetcher = new BrowserFetcher();
+                await browserFetcher.DownloadAsync();
+
+                _sharedBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
+                {
+                    Headless = headless,
+                    UserDataDir = _profileDir,
+                    DefaultViewport = new ViewPortOptions { Width = 1366, Height = 900 },
+                    Args = new[]
+                    {
+                        "--no-sandbox",
+                        "--disable-setuid-sandbox",
+                        "--disable-blink-features=AutomationControlled",
+                        "--window-size=1366,900"
+                    }
+                });
+                _sharedHeadless = headless;
+                _sharedPage = null;
+                _sesionAndeActiva = false;
+                _logger.LogInformation("ANDE portal: Chrome iniciado headless={Headless} (perfil {Dir})", headless, _profileDir);
+            }
+
+            if (_sharedPage == null || _sharedPage.IsClosed)
+            {
+                var pages = await _sharedBrowser!.PagesAsync();
+                _sharedPage = pages.FirstOrDefault() ?? await _sharedBrowser.NewPageAsync();
+                await _sharedPage.SetUserAgentAsync("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+                try
+                {
+                    await _sharedPage.EvaluateFunctionOnNewDocumentAsync(@"() => {
+                        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    }");
+                }
+                catch { /* ignore */ }
+            }
+
+            return _sharedPage!;
+        }
+
+        private async Task MinimizeChromeWindowAsync(IPage page)
+        {
+            try
+            {
+                var client = await page.Target.CreateCDPSessionAsync();
+                var win = await client.SendAsync<System.Text.Json.JsonElement>("Browser.getWindowForTarget");
+                if (!win.TryGetProperty("windowId", out var idEl)) return;
+                var windowId = idEl.GetInt32();
+                await client.SendAsync("Browser.setWindowBounds", new Dictionary<string, object>
+                {
+                    ["windowId"] = windowId,
+                    ["bounds"] = new Dictionary<string, object> { ["windowState"] = "minimized" }
+                });
+                _logger.LogInformation("ANDE: ventana Chrome minimizada (proceso sigue activo para consultas NIS)");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug("ANDE: no se pudo minimizar Chrome ({Msg})", ex.Message);
+            }
+        }
+
+        private async Task RestoreChromeWindowAsync(IPage page)
+        {
+            try
+            {
+                var client = await page.Target.CreateCDPSessionAsync();
+                var win = await client.SendAsync<System.Text.Json.JsonElement>("Browser.getWindowForTarget");
+                if (!win.TryGetProperty("windowId", out var idEl)) return;
+                var windowId = idEl.GetInt32();
+                await client.SendAsync("Browser.setWindowBounds", new Dictionary<string, object>
+                {
+                    ["windowId"] = windowId,
+                    ["bounds"] = new Dictionary<string, object> { ["windowState"] = "normal" }
+                });
+            }
+            catch { /* ignore */ }
+        }
+
+        private static async Task<bool> PortalEstaLogueadoAsync(IPage page)
+        {
+            try
+            {
+                return await page.EvaluateFunctionAsync<bool>(@"() => {
+                    const tieneToken = () => {
+                      try {
+                        const keys = Object.keys(localStorage || {});
+                        for (const k of keys) {
+                          if (!/kwfSesion|sesionUsuario|miCuenta/i.test(k)) continue;
+                          try {
+                            const raw = localStorage.getItem(k) || '';
+                            if (!raw || raw === 'null') continue;
+                            const o = JSON.parse(raw);
+                            if (!o) continue;
+                            if (o.token || o.JWTtoken || o.jwt || o.JwtToken) return true;
+                            if (o.resultado && (o.resultado.nombre || o.resultado.apellido || o.resultado.suministrosList)) return true;
+                          } catch (e) {}
+                        }
+                      } catch (e) {}
+                      return false;
+                    };
+                    if (tieneToken()) return true;
+
+                    const txt = ((document.body && document.body.innerText) || '');
+                    const n = txt.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+                    const title = ((document.title || '') + '').toLowerCase();
+                    if (title.includes('radware')) return false;
+
+                    const hasPasswordVisible = Array.from(document.querySelectorAll('input[type=password]'))
+                      .some(i => !!(i.offsetParent || (i.getClientRects && i.getClientRects().length)));
+                    if (/Mis Datos/i.test(n) && !hasPasswordVisible) return true;
+                    if (/Mis Suministros/i.test(n) && !hasPasswordVisible) return true;
+                    if (/Ultimos Comprobantes/i.test(n)) return true;
+                    if (/Cerrar sesion|Salir/i.test(n) && !hasPasswordVisible) return true;
+                    return false;
+                }");
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static async Task<bool> EsperarSesionPortalAsync(IPage page, int segundosMax)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(Math.Max(2, segundosMax));
+            while (DateTime.UtcNow < deadline)
+            {
+                if (await PortalEstaLogueadoAsync(page))
+                    return true;
+                await Task.Delay(1000);
+            }
+            return await PortalEstaLogueadoAsync(page);
+        }
+
+        private async Task<bool> AbrirFormularioLoginAsync(IPage page, string portalUrl)
+        {
+            async Task<bool> TienePasswordAsync()
+            {
+                try { return await page.EvaluateFunctionAsync<bool>("() => !!document.querySelector('input[type=password]')"); }
+                catch { return false; }
+            }
+
+            // Entrar siempre por la home de servicios (sin ?op=1). Luego abrir Mi Cuenta desde el menú.
+            try
+            {
+                var urlActual = (page.Url ?? "").ToLowerInvariant();
+                var yaEnPortal = urlActual.Contains("ande.gov.py") && !urlActual.Contains("op=1");
+                if (!yaEnPortal)
+                {
+                    await page.GoToAsync(portalUrl.TrimEnd('/') + "/", new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                        Timeout = 90000
+                    });
+                    await Task.Delay(3000);
+                }
+                else
+                {
+                    await Task.Delay(800);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ANDE portal: fallo cargando home servicios ({Msg})", ex.Message);
+                return false;
+            }
+
+            if (await TienePasswordAsync())
+            {
+                _logger.LogInformation("ANDE portal: formulario login ya visible en home");
+                return true;
+            }
+
+            // Preferir menú "Mi Cuenta" (flujo natural del portal)
+            var clicks = new[] { "Mi Cuenta", "Acceder", "Ingresar", "Iniciar sesion", "Iniciar sesión" };
+            foreach (var texto in clicks)
+            {
+                try
+                {
+                    var clicked = await page.EvaluateFunctionAsync<bool>(@"(texto) => {
+                        const norm = (s) => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+                        const target = norm(texto);
+                        const els = Array.from(document.querySelectorAll('a,button,span,div,li,p,label,[onclick]'));
+                        const el = els.find(e => {
+                          const t = norm(e.textContent);
+                          return t === target || (t.includes(target) && t.length < 48);
+                        });
+                        if (!el) return false;
+                        el.scrollIntoView({block:'center'});
+                        el.click();
+                        return true;
+                      }", texto);
+                    await Task.Delay(2800);
+                    if (await TienePasswordAsync())
+                    {
+                        _logger.LogInformation("ANDE portal: login visible tras click '{Texto}' (sin ?op=1)", texto);
+                        return true;
+                    }
+                    _logger.LogInformation("ANDE portal: click '{Texto}' => {Ok}", texto, clicked);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug("ANDE portal: click {Texto} fallo ({Msg})", texto, ex.Message);
+                }
+            }
+
+            // Último recurso: contenedores conocidos del portal (sin navegar a ?op=1)
+            try
+            {
+                var viaContainer = await page.EvaluateFunctionAsync<bool>(@"() => {
+                    const candidates = ['mi_cuenta','micuenta','login','acceso','cuenta'];
+                    for (const c of candidates) {
+                      try {
+                        if (typeof cambiarContainer === 'function') {
+                          cambiarContainer(c);
+                          return true;
+                        }
+                      } catch (e) {}
+                    }
+                    return false;
+                  }");
+                if (viaContainer)
+                {
+                    await Task.Delay(3000);
+                    if (await TienePasswordAsync())
+                    {
+                        _logger.LogInformation("ANDE portal: login vía cambiarContainer");
+                        return true;
+                    }
+                }
+            }
+            catch { /* ignore */ }
+
+            try
+            {
+                var botones = await page.EvaluateFunctionAsync<string>(@"() => {
+                    return Array.from(document.querySelectorAll('a,button'))
+                      .map(e => (e.textContent||'').trim().replace(/\s+/g,' ').slice(0,40))
+                      .filter(Boolean)
+                      .slice(0, 25)
+                      .join(' | ');
+                  }");
+                _logger.LogWarning("ANDE portal: no se vio login tras Mi Cuenta. Enlaces: {Botones}", botones);
+            }
+            catch { /* ignore */ }
+
+            return await TienePasswordAsync();
+        }
+
+        private async Task<bool> AutocompletarLoginConTecladoAsync(IPage page, string tipoDoc, string documento, string password)
+        {
+            // Preferir seteo por JS: en ANDE muchos inputs no son "clickables" para Puppeteer
+            try
+            {
+                var filledJs = await page.EvaluateFunctionAsync<bool>(@"(tipoDoc, documento, password) => {
+                    const norm = (s) => (s||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+                    const setNative = (el, value) => {
+                      if (!el) return false;
+                      try { el.scrollIntoView({ block: 'center', inline: 'nearest' }); } catch (e) {}
+                      const proto = window.HTMLInputElement.prototype;
+                      const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+                      try { el.focus(); } catch (e) {}
+                      if (setter) setter.call(el, value); else el.value = value;
+                      el.dispatchEvent(new Event('input', { bubbles: true }));
+                      el.dispatchEvent(new Event('change', { bubbles: true }));
+                      el.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+                      el.dispatchEvent(new Event('blur', { bubbles: true }));
+                      return (el.value || '') === value;
+                    };
+
+                    for (const sel of Array.from(document.querySelectorAll('select'))) {
+                      const match = Array.from(sel.options||[]).find(o => {
+                        const t = norm(o.textContent);
+                        return t.includes('c.i') || t.includes('ci civil') || t.includes('cedula') || t === norm(tipoDoc);
+                      });
+                      if (match) {
+                        sel.value = match.value;
+                        sel.dispatchEvent(new Event('input', { bubbles: true }));
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        break;
+                      }
+                    }
+
+                    const inputs = Array.from(document.querySelectorAll('input'));
+                    const passInput = inputs.find(i => i.type === 'password');
+                    let docInput = inputs.find(i => {
+                      if (!passInput || i === passInput || i.type === 'password' || i.type === 'hidden' || i.type === 'checkbox' || i.type === 'radio') return false;
+                      const tip = norm((i.placeholder||'')+' '+(i.name||'')+' '+(i.id||'')+' '+(i.getAttribute('aria-label')||''));
+                      return tip.includes('ci') || tip.includes('ruc') || tip.includes('pasaporte') || tip.includes('documento') || tip.includes('cedula') || tip.includes('numero');
+                    });
+                    if (!docInput) {
+                      docInput = inputs.find(i => i !== passInput && (i.type === 'text' || i.type === 'tel' || i.type === 'number' || !i.type));
+                    }
+
+                    const okDoc = setNative(docInput, documento);
+                    const okPass = setNative(passInput, password);
+                    if (docInput) docInput.setAttribute('data-gesco', 'ande-doc');
+                    if (passInput) passInput.setAttribute('data-gesco', 'ande-pass');
+                    return !!(okDoc && okPass);
+                  }", tipoDoc, documento, password);
+
+                if (filledJs) return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ANDE portal: autocompletar JS fallo ({Msg})", ex.Message);
+            }
+
+            // Fallback teclado (solo si el nodo es interactuable)
+            try
+            {
+                var hasMarked = await page.EvaluateFunctionAsync<bool>(@"() => {
+                    const mark = (el, id) => { if (el) el.setAttribute('data-gesco', id); };
+                    const inputs = Array.from(document.querySelectorAll('input'));
+                    const pass = inputs.find(i => i.type === 'password');
+                    const doc = inputs.find(i => i !== pass && i.type !== 'password' && i.type !== 'hidden' && (i.type === 'text' || i.type === 'tel' || i.type === 'number' || !i.type));
+                    mark(doc, 'ande-doc');
+                    mark(pass, 'ande-pass');
+                    return !!(doc && pass);
+                  }");
+                if (!hasMarked) return false;
+
+                async Task TryTypeAsync(string sel, string value)
+                {
+                    try
+                    {
+                        await page.WaitForSelectorAsync(sel, new WaitForSelectorOptions { Visible = false, Timeout = 5000 });
+                        await page.EvaluateFunctionAsync(@"(sel) => {
+                            const el = document.querySelector(sel);
+                            if (el) { el.style.opacity='1'; el.style.display='block'; el.removeAttribute('readonly'); el.removeAttribute('disabled'); }
+                          }", sel);
+                        await page.FocusAsync(sel);
+                        await page.Keyboard.DownAsync("Control");
+                        await page.Keyboard.PressAsync("KeyA");
+                        await page.Keyboard.UpAsync("Control");
+                        await page.Keyboard.TypeAsync(value, new PuppeteerSharp.Input.TypeOptions { Delay = 20 });
+                    }
+                    catch
+                    {
+                        // Ãšltimo recurso: value directo
+                        await page.EvaluateFunctionAsync(@"(sel, value) => {
+                            const el = document.querySelector(sel);
+                            if (!el) return;
+                            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+                            if (setter) setter.call(el, value); else el.value = value;
+                            el.dispatchEvent(new Event('input', { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                          }", sel, value);
+                    }
+                }
+
+                await TryTypeAsync("[data-gesco='ande-doc']", documento);
+                await TryTypeAsync("[data-gesco='ande-pass']", password);
+
+                return await page.EvaluateFunctionAsync<bool>(@"() => {
+                    const doc = document.querySelector('[data-gesco=""ande-doc""]');
+                    const pass = document.querySelector('[data-gesco=""ande-pass""]');
+                    return !!(doc && pass && doc.value && pass.value);
+                  }");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("ANDE portal: autocompletar teclado fallo ({Msg})", ex.Message);
+                return false;
+            }
+        }
+
+        private async Task<AndeConsultaResultadoDto?> ConsultarViaEndpointLegacyAsync(string nisLimpio)
+        {
+            string url = _config["AndeConfig:ConsultaScrapingUrl"]
+                ?? "http://201.217.43.238:9080/consulta/consulta_02.php";
+            string origin = _config["AndeConfig:HeadersOrigin"]
+                ?? "http://201.217.43.238:9080";
+
+            Exception? lastError = null;
+            for (int intento = 1; intento <= 2; intento++)
+            {
+                try
+                {
+                    _logger.LogInformation("Consultando ANDE legacy para NIS: {Nis} via {Url} (intento {Intento})", nisLimpio, url, intento);
+
+                    using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                    request.Headers.TryAddWithoutValidation("Origin", origin);
+                    request.Headers.TryAddWithoutValidation("Referer", origin + "/");
+                    request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                    request.Content = new FormUrlEncodedContent(new[]
+                    {
+                        new KeyValuePair<string, string>("name", nisLimpio)
+                    });
+
+                    using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(80));
+                    var response = await _httpClient.SendAsync(request, cts.Token);
+                    var body = await response.Content.ReadAsStringAsync(cts.Token);
+
+                    _logger.LogInformation("ANDE legacy respondiÃ³ HTTP {Status} ({Len} chars) para NIS {Nis}",
+                        (int)response.StatusCode, body?.Length ?? 0, nisLimpio);
+
+                    if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+                    {
+                        lastError = new Exception($"HTTP {(int)response.StatusCode}");
+                        continue;
+                    }
+
+                    var parsed = ParseHtmlConsultaAnde(body, nisLimpio);
+                    if (parsed != null && (parsed.Facturas.Count > 0 || parsed.SaldoDeuda > 0 || !string.IsNullOrWhiteSpace(parsed.Titular)))
+                    {
+                        parsed.EsSimulado = false;
+                        _logger.LogInformation(
+                            "ANDE legacy parse OK NIS {Nis}: titular={Titular}, saldo={Saldo}, facturas={Count}",
+                            nisLimpio, parsed.Titular, parsed.SaldoDeuda, parsed.Facturas.Count);
+                        return parsed;
+                    }
+
+                    _logger.LogWarning("ANDE legacy respondiÃ³ pero no se pudieron parsear facturas para NIS {Nis}. Preview: {Preview}",
+                        nisLimpio, body.Length > 400 ? body[..400] : body);
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    _logger.LogWarning("Consulta HTTP ANDE legacy fallÃ³ intento {Intento} ({Msg}).", intento, ex.Message);
+                    if (intento < 2)
+                        await Task.Delay(1500);
+                }
+            }
+
+            if (lastError != null)
+                _logger.LogWarning("Consulta ANDE legacy agotÃ³ reintentos: {Msg}", lastError.Message);
+
+            return null;
+        }
+
+        private static AndeConsultaResultadoDto? ParseHtmlConsultaAnde(string html, string nis)
+        {
+            if (string.IsNullOrWhiteSpace(html)) return null;
+
+            // Limpiar ruido tÃ­pico del HTML ANDE
+            var clean = System.Text.RegularExpressions.Regex.Replace(html, @"<br\s*/?>", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"&nbsp;?", " ", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            clean = System.Text.RegularExpressions.Regex.Replace(clean, @"\s+", " ");
+
+            var dto = new AndeConsultaResultadoDto { Nis = nis };
+
+            // Titular / nombre (formato portal Mi ANDE)
+            var titularMatch =
+                System.Text.RegularExpressions.Regex.Match(clean, @"(?:Name|Nombre|Titular|Cliente)\s*:?\s*([A-Za-z][A-Za-z\s\.]{3,80})", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                is { Success: true } m1 ? m1 :
+                System.Text.RegularExpressions.Regex.Match(clean, @"<b[^>]*>\s*([A-Z][A-Z\s\.]{5,80})\s*</b>", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            if (titularMatch.Success)
+                dto.Titular = titularMatch.Groups[1].Value.Trim();
+
+            // Documento / RUC / CI (portal muestra "RUC/CI: 709545")
+            var docMatch = System.Text.RegularExpressions.Regex.Match(clean,
+                @"(?:RUC\s*/\s*CI|RUC|C\.?I\.?|Documento|Cedula)\s*:?\s*(\d{4,12}(?:-\d)?)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (docMatch.Success)
+                dto.Documento = docMatch.Groups[1].Value.Trim();
+
+            // Extraer bloques/filas con monto + estado + fechas
+            var facturas = new List<AndeFacturaItemDto>();
+
+            // Formato portal / app: Gs. 594.000 + Pagado/Pendiente + Emision + Vencimiento
+            var cardRegex = new System.Text.RegularExpressions.Regex(
+                @"Gs\.?\s*(\d{1,3}(?:\.\d{3})+|\d{4,9})\s*(?:</?[^>]+>\s*)*(Pendiente(?:\s+de\s+Pago)?|Pagado|Paga(?:da)?|Cancelado)\s*(?:</?[^>]+>\s*)*(?:Emisi[oó]n\s*:?\s*)?(\d{1,2}/\d{1,2}/\d{2,4})?\s*(?:</?[^>]+>\s*)*(?:[-–]?\s*)?(?:Vencimiento\s*:?\s*)?(\d{1,2}/\d{1,2}/\d{2,4})?",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+            foreach (System.Text.RegularExpressions.Match match in cardRegex.Matches(clean))
+            {
+                if (!decimal.TryParse(LimpiarMonto(match.Groups[1].Value), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var monto) || monto <= 0)
+                    continue;
+
+                var estadoRaw = match.Groups[2].Value.Trim();
+                var estado = estadoRaw.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)
+                    ? "Pendiente de Pago"
+                    : "Pagado";
+
+                facturas.Add(new AndeFacturaItemDto
+                {
+                    Monto = monto,
+                    Estado = estado,
+                    Emision = match.Groups[3].Success ? match.Groups[3].Value : "",
+                    Vencimiento = match.Groups[4].Success ? match.Groups[4].Value : ""
+                });
+            }
+
+            // PatrÃ³n alterno sin prefijo Gs.
+            if (facturas.Count == 0)
+            {
+                var rowRegex = new System.Text.RegularExpressions.Regex(
+                    @"(?:Gs\.?\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,9})\s*(?:</?[^>]+>\s*)*(Pendiente(?:\s+de\s+Pago)?|Pagado|Paga(?:da)?|Cancelado)\s*(?:</?[^>]+>\s*)*(?:Emisi[oó]n\s*:?\s*)?(\d{1,2}/\d{1,2}/\d{2,4})?\s*(?:</?[^>]+>\s*)*(?:Vencimiento\s*:?\s*)?(\d{1,2}/\d{1,2}/\d{2,4})?",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                foreach (System.Text.RegularExpressions.Match match in rowRegex.Matches(clean))
+                {
+                    if (!decimal.TryParse(LimpiarMonto(match.Groups[1].Value), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var monto) || monto <= 0)
+                        continue;
+
+                    var estadoRaw = match.Groups[2].Value.Trim();
+                    var estado = estadoRaw.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)
+                        ? "Pendiente de Pago"
+                        : "Pagado";
+
+                    facturas.Add(new AndeFacturaItemDto
+                    {
+                        Monto = monto,
+                        Estado = estado,
+                        Emision = match.Groups[3].Success ? match.Groups[3].Value : "",
+                        Vencimiento = match.Groups[4].Success ? match.Groups[4].Value : ""
+                    });
+                }
+            }
+
+            // Fallback: filas de tabla <td>
+            if (facturas.Count == 0)
+            {
+                var tdRows = System.Text.RegularExpressions.Regex.Matches(
+                    clean,
+                    @"<tr[^>]*>(.*?)</tr>",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+
+                foreach (System.Text.RegularExpressions.Match row in tdRows)
+                {
+                    var cells = System.Text.RegularExpressions.Regex.Matches(row.Groups[1].Value, @"<t[dh][^>]*>(.*?)</t[dh]>", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline)
+                        .Cast<System.Text.RegularExpressions.Match>()
+                        .Select(c => System.Text.RegularExpressions.Regex.Replace(c.Groups[1].Value, "<.*?>", "").Trim())
+                        .Where(c => !string.IsNullOrWhiteSpace(c))
+                        .ToList();
+
+                    if (cells.Count < 2) continue;
+
+                    decimal monto = 0;
+                    string estado = "";
+                    string emision = "";
+                    string venc = "";
+
+                    foreach (var cell in cells)
+                    {
+                        if (monto == 0 && System.Text.RegularExpressions.Regex.IsMatch(cell, @"^\d{1,3}(\.\d{3})+$|^\d{4,9}$"))
+                            decimal.TryParse(LimpiarMonto(cell), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out monto);
+                        else if (string.IsNullOrEmpty(estado) && System.Text.RegularExpressions.Regex.IsMatch(cell, @"pendiente|pagad", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+                            estado = cell.Contains("Pendiente", StringComparison.OrdinalIgnoreCase) ? "Pendiente de Pago" : "Pagado";
+                        else if (System.Text.RegularExpressions.Regex.IsMatch(cell, @"^\d{1,2}/\d{1,2}/\d{2,4}$"))
+                        {
+                            if (string.IsNullOrEmpty(emision)) emision = cell;
+                            else if (string.IsNullOrEmpty(venc)) venc = cell;
+                        }
+                    }
+
+                    if (monto > 0 && !string.IsNullOrEmpty(estado))
+                    {
+                        facturas.Add(new AndeFacturaItemDto
+                        {
+                            Monto = monto,
+                            Estado = estado,
+                            Emision = emision,
+                            Vencimiento = venc
+                        });
+                    }
+                }
+            }
+
+            // Fallback final: sumar montos "Pendiente"
+            if (facturas.Count == 0)
+            {
+                var pendientes = System.Text.RegularExpressions.Regex.Matches(
+                    clean,
+                    @"(\d{1,3}(?:\.\d{3})+|\d{4,9})[^\d]{0,40}Pendiente",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                foreach (System.Text.RegularExpressions.Match p in pendientes)
+                {
+                    if (decimal.TryParse(LimpiarMonto(p.Groups[1].Value), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var monto) && monto > 0)
+                    {
+                        facturas.Add(new AndeFacturaItemDto
+                        {
+                            Monto = monto,
+                            Estado = "Pendiente de Pago"
+                        });
+                    }
+                }
+            }
+
+            // Fallback: etiquetas Importe / Total / Saldo
+            if (facturas.Count == 0)
+            {
+                var labeled = System.Text.RegularExpressions.Regex.Matches(
+                    clean,
+                    @"(?:Importe|Monto|Total(?:\s+a\s+Pagar)?|Saldo(?:\s+Deudor)?|Deuda)\s*:?\s*(?:Gs\.?\s*)?(\d{1,3}(?:\.\d{3})+|\d{4,9})",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+                foreach (System.Text.RegularExpressions.Match p in labeled)
+                {
+                    if (decimal.TryParse(LimpiarMonto(p.Groups[1].Value), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var monto) && monto > 0)
+                    {
+                        facturas.Add(new AndeFacturaItemDto
+                        {
+                            Monto = monto,
+                            Estado = "Pendiente de Pago"
+                        });
+                    }
+                }
+            }
+
+            // Deduplicar por monto+estado+emision
+            dto.Facturas = facturas
+                .GroupBy(f => $"{f.Monto}|{f.Estado}|{f.Emision}|{f.Vencimiento}")
+                .Select(g => g.First())
+                .OrderByDescending(f => f.Estado.StartsWith("Pendiente", StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(f => f.Emision)
+                .ToList();
+
+            // Si solo hay un monto etiquetado como total, usarlo como saldo aunque no haya filas
+            if (dto.Facturas.Count == 0)
+            {
+                var sole = System.Text.RegularExpressions.Regex.Match(
+                    clean,
+                    @"(?:Total|Saldo|Deuda)[^\d]{0,25}(\d{1,3}(?:\.\d{3})+|\d{4,9})",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                if (sole.Success &&
+                    decimal.TryParse(LimpiarMonto(sole.Groups[1].Value), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var soleMonto) &&
+                    soleMonto > 0)
+                {
+                    dto.Facturas.Add(new AndeFacturaItemDto
+                    {
+                        Monto = soleMonto,
+                        Estado = "Pendiente de Pago"
+                    });
+                }
+            }
+
+            dto.SaldoDeuda = dto.Facturas.Where(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase)).Sum(f => f.Monto);
+            dto.FacturasPendientes = dto.Facturas.Count(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase));
+            dto.Vencimiento = dto.Facturas.FirstOrDefault(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase))?.Vencimiento
+                ?? dto.Facturas.FirstOrDefault()?.Vencimiento
+                ?? "";
+
+            // Consumo kW si aparece
+            var kwMatch = System.Text.RegularExpressions.Regex.Match(clean, @"(\d{2,5})\s*k\s*w\s*h?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (kwMatch.Success && int.TryParse(kwMatch.Groups[1].Value, out var kw))
+                dto.ConsumoKw = kw;
+
+            if (string.IsNullOrWhiteSpace(dto.Titular))
+                dto.Titular = "TITULAR ANDE";
+
+            return dto.Facturas.Count > 0 || dto.SaldoDeuda > 0 ? dto : null;
+        }
+
+        private static string LimpiarMonto(string? valor)
+        {
+            if (string.IsNullOrWhiteSpace(valor)) return "0";
+            var v = valor.Trim()
+                .Replace("Gs.", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("GS.", "", StringComparison.OrdinalIgnoreCase)
+                .Replace(" ", "");
+
+            // Formato PY: 594.000 -> 594000
+            if (System.Text.RegularExpressions.Regex.IsMatch(v, @"^\d{1,3}(\.\d{3})+$"))
+                return v.Replace(".", "");
+
+            if (v.Contains('.') && v.Contains(','))
+                v = v.Replace(".", "").Replace(",", ".");
+            else if (v.Count(c => c == '.') > 1)
+                v = v.Replace(".", "");
+
+            return v;
+        }
+
+        private const string AndeRecaptchaSiteKey = "6LcND9ohAAAAALizDIFfkfpSjHm3Xtr0DwLOLc60";
+
+        public async Task<byte[]?> DescargarFacturaPdfOficialPortalAsync(
+            string nis,
+            string? pdfUrlCompleta = null,
+            string? secNis = null,
+            string? secRec = null,
+            string? fFact = null,
+            bool electronica = true,
+            string? kwfxToken = null)
+        {
+            var nisLimpio = new string((nis ?? "").Where(char.IsDigit).ToArray());
+            if (nisLimpio.Length == 0) return null;
+
+            const string openBase = "https://prod2.ande.gov.py:8581/sigaWs/api/open/";
+            string url;
+            if (!string.IsNullOrWhiteSpace(pdfUrlCompleta))
+            {
+                url = pdfUrlCompleta;
+            }
+            else if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
+            {
+                var f = fFact.Trim();
+                if (f.Contains('-') && f.Length >= 8)
+                {
+                    var p = f.Split('-', '/', '.');
+                    if (p.Length == 3 && p[0].Length == 4)
+                        f = $"{p[2].PadLeft(2, '0')}/{p[1].PadLeft(2, '0')}/{p[0]}";
+                }
+                var qs = $"nro_nis={nisLimpio}&sec_nis={secNis}&sec_rec={secRec}&f_fact={f}";
+                url = openBase + (electronica ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs;
+            }
+            else
+            {
+                url = openBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}";
+            }
+
+            await _portalLock.WaitAsync();
+            try
+            {
+                // PDF: headless por defecto (sin ventana). Si ya hay Chrome del Acceder/Consultar,
+                // no lo reinicies en otro modo para no cerrar esa sesión.
+                var headless = true;
+                if (bool.TryParse(_config["AndeConfig:PdfHeadless"], out var pdfHeadless))
+                    headless = pdfHeadless;
+                if (_sharedBrowser != null && !_sharedBrowser.IsClosed && _sharedHeadless.HasValue)
+                    headless = _sharedHeadless.Value;
+                var page = await EnsurePortalPageAsync(headless);
+                var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
+
+                if (!(page.Url ?? "").Contains("ande.gov.py/servicios", StringComparison.OrdinalIgnoreCase))
+                {
+                    await page.GoToAsync(portalUrl, new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.Networkidle0 },
+                        Timeout = 90000
+                    });
+                    await Task.Delay(2500);
+                }
+
+                if (!string.IsNullOrWhiteSpace(kwfxToken))
+                {
+                    await page.EvaluateFunctionAsync(@"(tok) => {
+                        try {
+                            const key = 'kwfSesionUsuarioMiCuenta_produccion';
+                            const prev = JSON.parse(localStorage.getItem(key) || '{}');
+                            prev.token = tok;
+                            localStorage.setItem(key, JSON.stringify(prev));
+                        } catch (e) {}
+                    }", kwfxToken);
+                }
+
+                try
+                {
+                    await page.WaitForFunctionAsync(
+                        "() => typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10 && typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                        new WaitForFunctionOptions { Timeout = 30000 });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ANDE portal PDF: sin CLAVE_SITIO_WEB/grecaptcha");
+                    return null;
+                }
+
+                var claveUsada = await page.EvaluateFunctionAsync<string>(
+                    $"() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB) ? CLAVE_SITIO_WEB : '{AndeRecaptchaSiteKey}'");
+
+                var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
+                    await new Promise(r => grecaptcha.ready(r));
+                    return await grecaptcha.execute(siteKey, { action: 'submit' });
+                }", claveUsada);
+
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    _logger.LogWarning("ANDE portal PDF: reCAPTCHA vacío");
+                    return null;
+                }
+
+                var urlFull = url;
+                if (!string.IsNullOrWhiteSpace(kwfxToken) && !urlFull.Contains("kwfxtoken=", StringComparison.OrdinalIgnoreCase))
+                    urlFull += (urlFull.Contains('?') ? "&" : "?") + "kwfxtoken=" + Uri.EscapeDataString(kwfxToken);
+                urlFull += (urlFull.Contains('?') ? "&" : "?") + "recapt=" + Uri.EscapeDataString(token);
+                _logger.LogInformation("ANDE portal PDF XHR: {Url} siteKey={Key}", url, claveUsada);
+
+                var b64 = await page.EvaluateFunctionAsync<string>(@"(u) => new Promise((resolve) => {
+                    try {
+                        var x = new XMLHttpRequest();
+                        x.open('GET', u, true);
+                        x.responseType = 'arraybuffer';
+                        x.onload = function () {
+                            var bytes = new Uint8Array(x.response || []);
+                            if (bytes.length < 5) return resolve('EMPTY:' + x.status);
+                            if (bytes[0] !== 0x25 || bytes[1] !== 0x50) {
+                                var head = new TextDecoder().decode(bytes.subarray(0, Math.min(120, bytes.length)));
+                                return resolve('NOTPDF:' + x.status + ':' + head);
+                            }
+                            var s = '', chunk = 0x8000;
+                            for (var i = 0; i < bytes.length; i += chunk) {
+                                s += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+                            }
+                            resolve(btoa(s));
+                        };
+                        x.onerror = function () { resolve('XHRERR'); };
+                        x.send();
+                    } catch (e) {
+                        resolve('EX:' + (e && e.message ? e.message : e));
+                    }
+                })", urlFull);
+
+                if (string.IsNullOrWhiteSpace(b64) || b64.StartsWith("ERR:") || b64.StartsWith("NOTPDF:") || b64.StartsWith("EX:") || b64.StartsWith("EMPTY") || b64 == "XHRERR")
+                {
+                    _logger.LogWarning("ANDE portal PDF falló: {Preview}", b64 is { Length: > 200 } ? b64[..200] : b64);
+                    return null;
+                }
+
+                var bytes = Convert.FromBase64String(b64);
+                _logger.LogInformation("ANDE portal PDF OK ({Len} bytes)", bytes.Length);
+                return bytes;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ANDE portal PDF error NIS {Nis}", nisLimpio);
+                return null;
+            }
+            finally
+            {
+                _portalLock.Release();
+            }
         }
 
         public async Task<byte[]> DescargarFacturaPdfAsync(string nis, string inquilinoNombre, string duplex)
         {
-            try
-            {
-                // INTENTO DE PUPPETEER PARA CAPTURAR LA WEB ORIGINAL DE LA ANDE
-                // Se requiere la descarga de Chromium en el server para que funcione
-                var browserFetcher = new BrowserFetcher();
-                await browserFetcher.DownloadAsync();
-                
-                await using var browser = await Puppeteer.LaunchAsync(new LaunchOptions { Headless = true });
-                await using var page = await browser.NewPageAsync();
-                
-                // Navegar a la página oficial de consultas de la ANDE
-                string andeUrl = "https://www.ande.gov.py/interna.php?id=43";
-                await page.GoToAsync(andeUrl);
+            var oficial = await DescargarFacturaPdfOficialPortalAsync(nis);
+            if (oficial != null && oficial.Length > 0)
+                return oficial;
 
-                // Como la web cambia constantemente o requiere captcha, si falla el locator
-                // hacemos catch y generamos el documento localmente asegurando el servicio ininterrumpido.
-                // await page.TypeAsync("input[name='nis']", nis);
-                // await page.ClickAsync("button.btn-consultar");
-                // await page.WaitForNavigationAsync();
-                // return await page.PdfDataAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning("Puppeteer no pudo extraer el PDF oficial de ANDE, generando documento interno respaldatorio: {Msg}", ex.Message);
-            }
-
-            // FALLBACK SEGURO: Generar la factura en PDF desde el backend
-            // Cumple con entregar un archivo en formato PDF oficial.
+            _logger.LogWarning("ANDE: PDF oficial no disponible, usando fallback interno para NIS {Nis}", nis);
             return GenerarPdfFacturaFallback(nis, inquilinoNombre, duplex);
         }
 
@@ -153,8 +1553,8 @@ namespace Gesco.Application.Services
                     {
                         containerHeader.Column(col =>
                         {
-                            col.Item().Text("ADMINISTRACIÓN NACIONAL DE ELECTRICIDAD").SemiBold().FontSize(18).FontColor(Colors.Blue.Darken2);
-                            col.Item().Text("Factura de Energía Eléctrica (Comprobante Digital)").FontSize(14).FontColor(Colors.Grey.Medium);
+                            col.Item().Text("ADMINISTRACIÃ“N NACIONAL DE ELECTRICIDAD").SemiBold().FontSize(18).FontColor(Colors.Blue.Darken2);
+                            col.Item().Text("Factura de Energia Electrica (Comprobante Digital)").FontSize(14).FontColor(Colors.Grey.Medium);
                             col.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                         });
                     }
@@ -171,13 +1571,13 @@ namespace Gesco.Application.Services
                                 col.Item().Text("Datos del Suministro").SemiBold().FontSize(14);
                                 col.Item().Text($"NIS: {nis}").Bold();
                                 col.Item().Text($"Titular: {inquilinoNombre ?? "GESCO CONDOMINIOS"}");
-                                col.Item().Text($"Dirección: Dúplex {duplex} - Condominio GESCO");
+                                col.Item().Text($"Direccion: Duplex {duplex} - Condominio GESCO");
                             });
 
                             row.RelativeItem().Column(col =>
                             {
-                                col.Item().Text("Datos de Facturación").SemiBold().FontSize(14);
-                                col.Item().Text($"Fecha Emisión: {DateTime.Now:dd/MM/yyyy}");
+                                col.Item().Text("Datos de Facturacion").SemiBold().FontSize(14);
+                                col.Item().Text($"Fecha Emision: {DateTime.Now:dd/MM/yyyy}");
                                 col.Item().Text($"Vencimiento: {DateTime.Now:dd/MM/yyyy}");
                                 col.Item().Text("Estado: PAGADO").Bold().FontColor(Colors.Green.Medium);
                             });
@@ -208,7 +1608,7 @@ namespace Gesco.Application.Services
                             table.Cell().PaddingTop(10).AlignRight().Text("85.000");
                             table.Cell().PaddingTop(10).AlignRight().Text("85.000");
 
-                            table.Cell().PaddingTop(5).Text("Consumo de Energía Activa");
+                            table.Cell().PaddingTop(5).Text("Consumo de Energia Activa");
                             table.Cell().PaddingTop(5).AlignRight().Text($"{deudaMock.Kw} kW");
                             table.Cell().PaddingTop(5).AlignRight().Text("450");
                             table.Cell().PaddingTop(5).AlignRight().Text($"{(deudaMock.Kw * 450):N0}");
@@ -222,7 +1622,7 @@ namespace Gesco.Application.Services
 
                     page.Footer().AlignCenter().Text(x =>
                     {
-                        x.Span("Documento generado mediante integración API ANDE/GESCO - ");
+                        x.Span("Documento generado mediante integracion API ANDE/GESCO - ");
                         x.CurrentPageNumber();
                         x.Span(" / ");
                         x.TotalPages();
@@ -246,55 +1646,28 @@ namespace Gesco.Application.Services
                     TieneDesconexion = false,
                     EstadoConexion = "MEDIDOR NO REGISTRADO",
                     EstadoPago = "SIN DEUDA",
-                    Observaciones = "El número de NIS ingresado no es válido o no cuenta con servicio activo."
+                    Observaciones = "El n\u00famero de NIS ingresado no es v\u00e1lido o no cuenta con servicio activo.",
+                    EsSimulado = true
                 };
             }
 
-            string nisLimpio = nis.Trim();
+            string nisLimpio = new string(nis.Where(char.IsDigit).ToArray());
+            if (string.IsNullOrEmpty(nisLimpio)) nisLimpio = nis.Trim();
 
-            // 1. Intentar buscar en la base de datos local si este NIS pertenece a algún dúplex de los condominios
+            // 1. Enriquecer con datos locales del duplex (solo direccion/contexto)
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetService<IApplicationDbContext>();
-            
-            string titular = "TITULAR RESIDENCIAL / COMERCIAL ANDE";
-            string direccion = "Asunción / Gran Asunción - Paraguay";
-            bool encontradoEnDb = false;
-            decimal deudaDb = -1m;
 
+            string direccionLocal = "";
             if (db != null)
             {
                 try
                 {
                     var unidad = await db.UnidadesCondominio
-                        .Include(u => u.Contratos)
-                            .ThenInclude(c => c.Inquilino)
-                        .FirstOrDefaultAsync(u => u.NisAnde == nisLimpio);
+                        .FirstOrDefaultAsync(u => u.NisAnde == nisLimpio || u.NisAnde == nis.Trim());
 
                     if (unidad != null)
-                    {
-                        encontradoEnDb = true;
-                        direccion = $"{unidad.NombreCondominio} - {unidad.CodigoUnidad}";
-                        var contratoActivo = unidad.Contratos?.FirstOrDefault(c => c.EstaActivo);
-                        if (contratoActivo != null && contratoActivo.Inquilino != null)
-                        {
-                            titular = $"{contratoActivo.Inquilino.RazonSocial} ({direccion})";
-                        }
-                        else if (contratoActivo != null)
-                        {
-                            titular = $"Inquilino Contrato #{contratoActivo.ContratoId} ({direccion})";
-                        }
-                        else
-                        {
-                            titular = $"Unidad Disponible ({direccion})";
-                        }
-
-                        // Revisar si existe algún registro de gasto luz para saber su saldo en el sistema
-                        var ultimoPago = await db.GastosMantenimiento.Where(g => g.UnidadId == unidad.UnidadId && g.Descripcion == "Luz").OrderByDescending(g => g.GastoId).FirstOrDefaultAsync();
-                        if (ultimoPago != null)
-                        {
-                            deudaDb = ultimoPago.Monto;
-                        }
-                    }
+                        direccionLocal = $"{unidad.NombreCondominio} - {unidad.CodigoUnidad}";
                 }
                 catch (Exception ex)
                 {
@@ -302,82 +1675,53 @@ namespace Gesco.Application.Services
                 }
             }
 
-            // 2. Consultar saldo y consumo en línea / cálculo
-            var consumoRes = await ConsultarConsumoAsync(nisLimpio);
-            decimal deuda = deudaDb >= 0 ? deudaDb : consumoRes.Deuda;
-            int kw = consumoRes.Kw;
+            // 2. Consulta real ANDE (montos/facturas oficiales)
+            var ande = await ConsultarFacturasRealesAsync(nisLimpio);
 
-            // 3. Determinar estado de desconexión y morosidad
-            bool tieneDesconexion = false;
-            int facturasPendientes = 1;
-            string estadoConexion = "🟢 CONECTADO - SERVICIO ACTIVO";
-            string estadoPago = "PENDIENTE";
-            string observaciones = "El suministro eléctrico se encuentra activo y operando con normalidad en la red de la ANDE.";
+            if (ande != null)
+            {
+                if (!string.IsNullOrWhiteSpace(direccionLocal))
+                    ande.Direccion = direccionLocal;
+                else if (string.IsNullOrWhiteSpace(ande.Direccion))
+                    ande.Direccion = "Asunci\u00f3n / Gran Asunci\u00f3n - Paraguay";
 
-            var now = DateTime.Now;
-            if (!int.TryParse(nisLimpio.Length >= 2 ? nisLimpio.Substring(nisLimpio.Length - 2) : "15", out int nisNum))
-                nisNum = 15;
-            int diaVenc = (nisNum % 15) + 10;
-            string vencimientoStr = $"{diaVenc:D2}/{now.Month:D2}/{now.Year}";
+                ande.TieneDesconexion = ande.SaldoDeuda >= 5_000_000m;
+                ande.EstadoConexion = ande.TieneDesconexion
+                    ? "ORDEN DE DESCONEXI\u00d3N POR MOROSIDAD (AVISO DE CORTE ANDE)"
+                    : (ande.SaldoDeuda > 0
+                        ? "CONECTADO - SERVICIO ACTIVO (DEUDA PENDIENTE)"
+                        : "CONECTADO - SIN DEUDA (AL D\u00cdA)");
+                ande.EstadoPago = ande.SaldoDeuda > 0
+                    ? (ande.TieneDesconexion ? $"MOROSO - DEUDA Gs. {ande.SaldoDeuda:N0}" : "PENDIENTE DE PAGO")
+                    : "AL D\u00cdA - ABONADO";
+                ande.Observaciones = string.IsNullOrWhiteSpace(ande.Observaciones)
+                    ? "Montos y facturas obtenidos en l\u00ednea desde el servicio comercial ANDE."
+                    : ande.Observaciones;
+                ande.FechaConsulta = DateTime.Now;
+                ande.EsSimulado = false;
+                return ande;
+            }
 
-            // Lógica clara y precisa:
-            // - Si es uno de los medidores pagados/al día (ej. 3070874, 2994412, o terminados en par sin deuda)
-            if (nisLimpio == "3070874" || nisLimpio == "2994412" || (encontradoEnDb && (nisNum % 2 == 0)))
-            {
-                deuda = 0;
-                kw = kw > 0 ? kw : 210;
-                facturasPendientes = 0;
-                tieneDesconexion = false;
-                estadoConexion = "🟢 CONECTADO - SIN DEUDA (AL DÍA)";
-                estadoPago = "AL DÍA - ABONADO";
-                observaciones = "El medidor no registra deudas pendientes en el sistema comercial de la ANDE. El suministro está 100% activo y garantizado sin riesgo de corte.";
-                vencimientoStr = $"17/{now.Month:D2}/{now.Year} (Pagado)";
-            }
-            else if (nisLimpio.EndsWith("9") || nisLimpio.EndsWith("8") || nisLimpio == "3070899" || nisLimpio == "3070889")
-            {
-                // Simulación para medidores con orden de corte o morosidad alta en la ANDE
-                facturasPendientes = 2;
-                tieneDesconexion = true;
-                estadoConexion = "🔴 ⚠️ ORDEN DE DESCONEXIÓN EN CURSO (AVISO DE CORTE ANDE)";
-                estadoPago = "MOROSO - 2 FACTURAS VENCIDAS";
-                observaciones = "¡ATENCIÓN! El medidor registra 2 o más facturas vencidas en la ANDE. Se ha emitido orden de suspensión de suministro eléctrico (desconexión). Se requiere el pago inmediato para restablecer o evitar el corte del suministro.";
-            }
-            else if (nisLimpio == "3041051")
-            {
-                // NIS con morosidad crítica acumulada (Gs. 17.000.000) y orden de corte
-                deuda = 17000000m;
-                kw = 3450;
-                facturasPendientes = 14;
-                tieneDesconexion = true;
-                estadoConexion = "🔴 ⚠️ ORDEN DE DESCONEXIÓN POR MOROSIDAD CRÍTICA (AVISO DE CORTE ANDE)";
-                estadoPago = "MOROSO GRAVE - Gs. 17.000.000 ACUMULADOS";
-                observaciones = "¡ALERTA CRÍTICA! El medidor registra una deuda acumulada de Gs. 17.000.000 (aprox. 14 facturas vencidas en el sistema comercial de la ANDE). Se ha emitido orden inmediata de corte y retiro de medidor por morosidad crítica. Se requiere acudir urgentemente a oficinas de la ANDE o regularizar el pago.";
-            }
-            else
-            {
-                // Medidor normal con 1 factura activa (ej: 3070876 Ana Rosa, 3070875 Pily)
-                facturasPendientes = 1;
-                tieneDesconexion = false;
-                estadoConexion = "🟢 CONECTADO - SERVICIO ACTIVO (1 FACTURA EMITIDA)";
-                estadoPago = "PENDIENTE DE PAGO";
-                observaciones = $"El suministro eléctrico está activo en la red ANDE. Registra 1 factura emitida pendiente de pago con vencimiento el {vencimientoStr}. No existe orden de corte activa en este momento.";
-            }
+            // 3. Sin respuesta real: no inventar montos
+            var obs = "No se pudo obtener el saldo real de ANDE. Abra Consultar ANDE, complete captcha si pide, pulse Acceder y espere la consulta del NIS.";
 
             return new AndeConsultaResultadoDto
             {
                 Nis = nisLimpio,
-                Titular = titular,
-                Direccion = direccion,
-                SaldoDeuda = deuda,
-                ConsumoKw = kw,
-                FacturasPendientes = facturasPendientes,
-                TieneDesconexion = tieneDesconexion,
-                EstadoConexion = estadoConexion,
-                EstadoPago = estadoPago,
+                Titular = "NO DISPONIBLE",
+                Documento = "",
+                Direccion = string.IsNullOrWhiteSpace(direccionLocal) ? "Asunci\u00f3n / Gran Asunci\u00f3n - Paraguay" : direccionLocal,
+                SaldoDeuda = 0,
+                ConsumoKw = 0,
+                FacturasPendientes = 0,
+                TieneDesconexion = false,
+                EstadoConexion = "SIN RESPUESTA ANDE",
+                EstadoPago = "NO CONSULTADO",
                 FechaConsulta = DateTime.Now,
-                Vencimiento = vencimientoStr,
-                Observaciones = observaciones,
-                EsSimulado = !encontradoEnDb
+                Vencimiento = "",
+                Observaciones = obs,
+                EsSimulado = true,
+                Facturas = new List<AndeFacturaItemDto>()
             };
         }
     }
