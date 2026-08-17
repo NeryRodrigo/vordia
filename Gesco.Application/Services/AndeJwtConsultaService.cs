@@ -15,6 +15,8 @@ namespace Gesco.Application.Services
     {
         Task<(bool Ok, string Mensaje, bool Renovado)> AsegurarJwtAsync(CancellationToken ct = default);
         Task<AndeConsultaResultadoDto> ConsultarSaldoAsync(string nis, CancellationToken ct = default);
+        /// <summary>Token kwfx de la sesión HTTP actual (si vigente).</summary>
+        string? GetKwfxTokenActual();
         /// <summary>Descarga el KUDE/PDF oficial de ANDE. Opcionalmente con params de un comprobante concreto.</summary>
         Task<byte[]?> DescargarFacturaPdfOficialAsync(
             string nis,
@@ -53,17 +55,101 @@ namespace Gesco.Application.Services
 
         private readonly IConfiguration _config;
         private readonly ILogger<AndeJwtConsultaService> _logger;
+        private readonly IAndeCredentialsStore _creds;
 
-        public AndeJwtConsultaService(IConfiguration config, ILogger<AndeJwtConsultaService> logger)
+        public AndeJwtConsultaService(
+            IConfiguration config,
+            ILogger<AndeJwtConsultaService> logger,
+            IAndeCredentialsStore creds)
         {
             _config = config;
             _logger = logger;
+            _creds = creds;
         }
 
         // Compatibilidad con AddHttpClient&lt;IAndeJwtConsultaService, ...&gt; (HttpClient inyectado se ignora: usamos jar de cookies estático).
-        public AndeJwtConsultaService(HttpClient _, IConfiguration config, ILogger<AndeJwtConsultaService> logger)
-            : this(config, logger)
+        public AndeJwtConsultaService(
+            HttpClient _,
+            IConfiguration config,
+            ILogger<AndeJwtConsultaService> logger,
+            IAndeCredentialsStore creds)
+            : this(config, logger, creds)
         {
+        }
+
+        /// <summary>Invalida token JWT/kwfx en memoria (p. ej. al cambiar credenciales).</summary>
+        public static void InvalidarSesionEstatica()
+        {
+            _kwfxToken = null;
+            _jwt = null;
+            _tokenExpUtc = DateTimeOffset.MinValue;
+        }
+
+        /// <summary>Prueba login HTTP con credenciales explícitas y deja la sesión lista si OK.</summary>
+        public static async Task<(bool Ok, string Mensaje, bool Renovado)> ProbarLoginConCredencialesAsync(
+            IConfiguration config,
+            string tipoDocumento,
+            string documento,
+            string password,
+            string cedulaRepresentante,
+            string tipoSolicitante,
+            CancellationToken ct = default)
+        {
+            await Gate.WaitAsync(ct);
+            try
+            {
+                InvalidarSesionEstatica();
+
+                try
+                {
+                    using var warm = await AndeHttp.GetAsync(PortalUrl, ct);
+                    _ = await warm.Content.ReadAsStringAsync(ct);
+                    _lastWarmupUtc = DateTimeOffset.UtcNow;
+                }
+                catch
+                {
+                    /* warmup best-effort */
+                }
+
+                var tipo = NormalizarTipoDocumento(tipoDocumento);
+                using var form = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["tipoDocumento"] = tipo,
+                    ["documentoIdentificacion"] = (documento ?? "").Trim(),
+                    ["password"] = password ?? "",
+                    ["cedulaRepresentante"] = string.IsNullOrWhiteSpace(cedulaRepresentante) ? "lteor" : cedulaRepresentante,
+                    ["tipoSolicitante"] = string.IsNullOrWhiteSpace(tipoSolicitante) ? "Sin registros" : tipoSolicitante,
+                    ["clientKey"] = config["AndeConfig:ClientKey"] ?? ClientKey
+                });
+
+                using var resp = await AndeHttp.PostAsync(AccederUrl, form, ct);
+                var txt = await resp.Content.ReadAsStringAsync(ct);
+                if (EsBloqueoRadware(txt))
+                    return (false, "ANDE bloqueó el acceso (WAF). Reintentá en unos minutos.", false);
+
+                using var docJson = JsonDocument.Parse(txt);
+                var root = docJson.RootElement;
+                var loginOk = root.TryGetProperty("login", out var lg) && lg.ValueKind == JsonValueKind.True;
+                if (!loginOk)
+                    return (false, "Usuario o contraseña incorrectos en Mi Cuenta ANDE.", false);
+
+                _kwfxToken = root.TryGetProperty("token", out var tk) ? tk.GetString() : null;
+                _jwt = root.TryGetProperty("JWTtoken", out var jwt) ? jwt.GetString() : null;
+                _tokenExpUtc = ExtraerExpJwt(_jwt) ?? DateTimeOffset.UtcNow.AddMinutes(15);
+
+                if (string.IsNullOrWhiteSpace(_kwfxToken))
+                    return (false, "ANDE no devolvió token de sesión.", false);
+
+                return (true, "Login ANDE OK.", true);
+            }
+            catch (Exception ex)
+            {
+                return (false, $"Error al validar con ANDE: {ex.Message}", false);
+            }
+            finally
+            {
+                Gate.Release();
+            }
         }
 
         private static HttpClient CrearHttpClient()
@@ -85,6 +171,8 @@ namespace Gesco.Application.Services
             return http;
         }
 
+        public string? GetKwfxTokenActual() => TokenVigente() ? _kwfxToken : null;
+
         public async Task<(bool Ok, string Mensaje, bool Renovado)> AsegurarJwtAsync(CancellationToken ct = default)
         {
             await Gate.WaitAsync(ct);
@@ -93,10 +181,13 @@ namespace Gesco.Application.Services
                 if (TokenVigente())
                     return (true, "JWT/sesión ANDE aún vigente.", false);
 
+                if (!_creds.EstaConfigurado())
+                    return (false, "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta.", false);
+
                 var ok = await LoginHttpAsync(ct);
                 return ok
                     ? (true, "Login ANDE OK (HTTP, sin Chrome).", true)
-                    : (false, "No se pudo autenticar en ANDE. Revisá AndeConfig (TipoDocumento/Documento/Password).", false);
+                    : (false, "No se pudo autenticar en ANDE. Revisá usuario/contraseña de Mi Cuenta.", false);
             }
             finally
             {
@@ -269,13 +360,21 @@ namespace Gesco.Application.Services
                     var pdf = await DescargarPdfConRecaptchaBrowserAsync(url, kwfx, ct);
                     if (pdf != null) return pdf;
                 }
+                catch (ProcessException ex)
+                {
+                    // Chrome del perfil PDF no arrancó: no reintentar más URLs; el controller usa AndeScrapingService.
+                    _logger.LogWarning(
+                        "ANDE PDF: Chrome (JWT) no disponible ({Msg}). Se usará el fallback del portal.",
+                        ex.Message);
+                    break;
+                }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "ANDE PDF fallo en {Url}", url);
+                    _logger.LogDebug(ex, "ANDE PDF intento fallido en {Url}", url);
                 }
             }
 
-            _logger.LogWarning("ANDE PDF: no se obtuvo PDF oficial para NIS {Nis}", nisLimpio);
+            _logger.LogInformation("ANDE PDF: JWT/reCAPTCHA sin resultado para NIS {Nis}; el API intentará fallback portal.", nisLimpio);
             return null;
         }
 
@@ -565,24 +664,9 @@ namespace Gesco.Application.Services
 
             if (!alive)
             {
-                var fetcher = new BrowserFetcher();
-                await fetcher.DownloadAsync();
-                _pdfBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
-                {
-                    Headless = headless,
-                    UserDataDir = profileDir,
-                    DefaultViewport = new ViewPortOptions { Width = 1280, Height = 800 },
-                    Args = new[]
-                    {
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-blink-features=AutomationControlled",
-                        "--window-size=1280,800"
-                    }
-                });
+                _pdfBrowser = await AndeChromeLauncher.LaunchAsync(profileDir, headless, _logger);
                 _pdfHeadless = headless;
                 _pdfPage = null;
-                _logger.LogInformation("ANDE PDF: Chrome iniciado headless={Headless}", headless);
             }
 
             if (_pdfPage == null || _pdfPage.IsClosed)
@@ -736,9 +820,9 @@ namespace Gesco.Application.Services
 
         private async Task<bool> LoginHttpAsync(CancellationToken ct)
         {
-            var tipo = NormalizarTipoDocumento(_config["AndeConfig:TipoDocumento"]);
-            var doc = _config["AndeConfig:Documento"] ?? "";
-            var pass = _config["AndeConfig:Password"] ?? "";
+            var tipo = NormalizarTipoDocumento(_creds.GetTipoDocumento());
+            var doc = _creds.GetDocumento();
+            var pass = _creds.GetPassword();
 
             if (string.IsNullOrWhiteSpace(doc) || string.IsNullOrWhiteSpace(pass))
             {
@@ -753,8 +837,8 @@ namespace Gesco.Application.Services
                 ["tipoDocumento"] = tipo,
                 ["documentoIdentificacion"] = doc.Trim(),
                 ["password"] = pass,
-                ["cedulaRepresentante"] = _config["AndeConfig:CedulaRepresentante"] ?? "lteor",
-                ["tipoSolicitante"] = _config["AndeConfig:TipoSolicitante"] ?? "Sin registros",
+                ["cedulaRepresentante"] = _creds.GetCedulaRepresentante(),
+                ["tipoSolicitante"] = _creds.GetTipoSolicitante(),
                 ["clientKey"] = _config["AndeConfig:ClientKey"] ?? ClientKey
             });
 

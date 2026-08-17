@@ -65,6 +65,7 @@ builder.Services.AddScoped<IMorosidadService, MorosidadService>();
 builder.Services.AddScoped<DataIntelligenceService>();
 builder.Services.AddScoped<IActividadService, ActividadService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddSingleton<IAndeCredentialsStore, AndeCredentialsStore>();
 builder.Services.AddHttpClient<IAndeScrapingService, AndeScrapingService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(180);
