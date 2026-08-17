@@ -41,17 +41,20 @@ namespace Gesco.Application.Services
         private readonly IConfiguration _config;
         private readonly ILogger<AndeScrapingService> _logger;
         private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IAndeCredentialsStore _creds;
 
         public AndeScrapingService(
             HttpClient httpClient,
             IConfiguration config,
             ILogger<AndeScrapingService> logger,
-            IServiceScopeFactory scopeFactory)
+            IServiceScopeFactory scopeFactory,
+            IAndeCredentialsStore creds)
         {
             _httpClient = httpClient;
             _config = config;
             _logger = logger;
             _scopeFactory = scopeFactory;
+            _creds = creds;
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
@@ -426,8 +429,8 @@ namespace Gesco.Application.Services
 
         public async Task<(bool Ok, string Mensaje, bool YaEstabaLogueado)> AsegurarSesionAsync()
         {
-            var documento = _config["AndeConfig:Documento"];
-            var password = _config["AndeConfig:Password"];
+            var documento = _creds.GetDocumento();
+            var password = _creds.GetPassword();
             var tipoDoc = _config["AndeConfig:TipoDocumento"] ?? "C.I. Civil";
             var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
 
@@ -590,8 +593,8 @@ namespace Gesco.Application.Services
                     // Solo si realmente no hay sesión: pedir Acceder (no debería pasar tras AsegurarSesion).
                     _logger.LogWarning("ANDE: sin sesión real al consultar NIS — se requiere Acceder de nuevo.");
                     _sesionAndeActiva = false;
-                    var documento = _config["AndeConfig:Documento"];
-                    var password = _config["AndeConfig:Password"];
+                    var documento = _creds.GetDocumento();
+                    var password = _creds.GetPassword();
                     var tipoDoc = _config["AndeConfig:TipoDocumento"] ?? "C.I. Civil";
                     await RestoreChromeWindowAsync(page);
                     if (string.IsNullOrWhiteSpace(documento) || string.IsNullOrWhiteSpace(password))
@@ -707,26 +710,11 @@ namespace Gesco.Application.Services
 
             if (!browserAlive)
             {
-                var browserFetcher = new BrowserFetcher();
-                await browserFetcher.DownloadAsync();
-
-                _sharedBrowser = await Puppeteer.LaunchAsync(new LaunchOptions
-                {
-                    Headless = headless,
-                    UserDataDir = _profileDir,
-                    DefaultViewport = new ViewPortOptions { Width = 1366, Height = 900 },
-                    Args = new[]
-                    {
-                        "--no-sandbox",
-                        "--disable-setuid-sandbox",
-                        "--disable-blink-features=AutomationControlled",
-                        "--window-size=1366,900"
-                    }
-                });
+                _sharedBrowser = await AndeChromeLauncher.LaunchAsync(_profileDir, headless, _logger);
                 _sharedHeadless = headless;
                 _sharedPage = null;
                 _sesionAndeActiva = false;
-                _logger.LogInformation("ANDE portal: Chrome iniciado headless={Headless} (perfil {Dir})", headless, _profileDir);
+                // Si usó perfil temp, recordar el path no es crítico; el dir preferido queda para la próxima.
             }
 
             if (_sharedPage == null || _sharedPage.IsClosed)
@@ -1421,7 +1409,22 @@ namespace Gesco.Application.Services
                     headless = pdfHeadless;
                 if (_sharedBrowser != null && !_sharedBrowser.IsClosed && _sharedHeadless.HasValue)
                     headless = _sharedHeadless.Value;
-                var page = await EnsurePortalPageAsync(headless);
+
+                IPage page;
+                try
+                {
+                    page = await EnsurePortalPageAsync(headless);
+                }
+                catch (ProcessException)
+                {
+                    // Perfil trabado / Chromium roto: forzar relaunch limpio
+                    try { if (_sharedBrowser != null) await _sharedBrowser.CloseAsync(); } catch { /* ignore */ }
+                    _sharedBrowser = null;
+                    _sharedPage = null;
+                    _sesionAndeActiva = false;
+                    AndeChromeLauncher.ClearProfileLocks(_profileDir ?? "");
+                    page = await EnsurePortalPageAsync(headless);
+                }
                 var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
 
                 if (!(page.Url ?? "").Contains("ande.gov.py/servicios", StringComparison.OrdinalIgnoreCase))

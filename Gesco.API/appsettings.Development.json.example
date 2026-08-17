@@ -1,0 +1,24 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AndeConfig": {
+    "PortalUrl": "https://www.ande.gov.py/servicios/",
+    "TipoDocumento": "TD001",
+    "Documento": "TU_CI_O_RUC_ANDE",
+    "Password": "TU_PASSWORD_MI_CUENTA_ANDE",
+    "CedulaRepresentante": "lteor",
+    "TipoSolicitante": "Sin registros",
+    "ClientKey": "iBLQWFskMfSF5oGhD2a1UYNZyuYo0tdh",
+    "JwtHeadless": false,
+    "PdfHeadless": true,
+    "Headless": false,
+    "UsarLegacy": false,
+    "EsperaLoginSegundos": 300,
+    "ConsultaScrapingUrl": "http://201.217.43.238:9080/consulta/consulta_02.php",
+    "HeadersOrigin": "http://201.217.43.238:9080"
+  }
+}

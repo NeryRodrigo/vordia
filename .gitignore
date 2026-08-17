@@ -364,3 +364,6 @@ FodyWeavers.xsd
 # Diagnosticos locales ANDE (probes / dumps - no van al servidor)
 _ande_diag/
 _ande_diag2/
+
+# Credenciales locales (no subir al repo / servidor ajeno)
+Gesco.API/appsettings.Development.json

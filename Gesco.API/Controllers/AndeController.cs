@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Gesco.Application.Services;
@@ -13,13 +14,69 @@ namespace Gesco.API.Controllers
     {
         private readonly IAndeScrapingService _andeScrapingService;
         private readonly IAndeJwtConsultaService _andeJwtConsultaService;
+        private readonly IAndeCredentialsStore _creds;
 
         public AndeController(
             IAndeScrapingService andeScrapingService,
-            IAndeJwtConsultaService andeJwtConsultaService)
+            IAndeJwtConsultaService andeJwtConsultaService,
+            IAndeCredentialsStore creds)
         {
             _andeScrapingService = andeScrapingService;
             _andeJwtConsultaService = andeJwtConsultaService;
+            _creds = creds;
+        }
+
+        /// <summary>Indica si hay sesión ANDE activa en memoria (esta corrida / hasta logout).</summary>
+        [HttpGet("credenciales/estado")]
+        public IActionResult CredencialesEstado()
+        {
+            return Ok(new
+            {
+                configurado = _creds.EstaConfigurado(),
+                documentoEnmascarado = _creds.DocumentoEnmascarado()
+            });
+        }
+
+        /// <summary>
+        /// Guarda usuario/clave ANDE solo en memoria de esta sesión y valida el login.
+        /// Se borran al cerrar sesión Gesco (DELETE credenciales).
+        /// </summary>
+        [HttpPost("credenciales")]
+        public async Task<IActionResult> GuardarCredenciales(
+            [FromBody] AndeCredencialesRequest? body,
+            CancellationToken ct)
+        {
+            try
+            {
+                var (ok, mensaje) = await _creds.GuardarYValidarAsync(
+                    body?.Documento ?? "",
+                    body?.Password ?? "",
+                    body?.TipoDocumento,
+                    ct);
+
+                if (!ok)
+                    return BadRequest(new { ok = false, mensaje, requiereCredenciales = true });
+
+                return Ok(new
+                {
+                    ok = true,
+                    mensaje,
+                    documentoEnmascarado = _creds.DocumentoEnmascarado()
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { ok = false, mensaje = ex.Message });
+            }
+        }
+
+        /// <summary>Limpia CI/clave ANDE de sesión e invalida JWT (llamar al logout Gesco).</summary>
+        [HttpDelete("credenciales")]
+        [HttpPost("credenciales/cerrar")]
+        public IActionResult CerrarCredencialesSesion()
+        {
+            _creds.LimpiarSesion();
+            return Ok(new { ok = true, mensaje = "Sesión ANDE limpiada." });
         }
 
         /// <summary>
@@ -37,17 +94,25 @@ namespace Gesco.API.Controllers
         {
             try
             {
-                // Misma idea que Consultar Saldos: asegurar sesión JWT primero.
-                await _andeJwtConsultaService.AsegurarJwtAsync();
+                if (!_creds.EstaConfigurado())
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        requiereCredenciales = true,
+                        mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
+                    });
 
-                var pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
-                    nis, secNis, secRec, fFact, electronica);
+                // Sesión JWT primero (token); PDF prioriza Chrome del portal (más estable) + kwfx.
+                await _andeJwtConsultaService.AsegurarJwtAsync();
+                var kwfx = _andeJwtConsultaService.GetKwfxTokenActual();
+
+                var pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
+                    nis, null, secNis, secRec, fFact, electronica ?? true, kwfx);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
                 {
-                    // Fallback: Chrome del botón Acceder / Consultar Saldos
-                    pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
-                        nis, null, secNis, secRec, fFact, electronica ?? true);
+                    pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
+                        nis, secNis, secRec, fFact, electronica);
                 }
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
@@ -81,6 +146,14 @@ namespace Gesco.API.Controllers
         {
             try
             {
+                if (!_creds.EstaConfigurado())
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        requiereCredenciales = true,
+                        mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
+                    });
+
                 var (ok, mensaje, yaEstaba) = await _andeScrapingService.AsegurarSesionAsync();
                 if (!ok)
                     return StatusCode(408, new { ok = false, mensaje, yaEstabaLogueado = yaEstaba });
@@ -100,9 +173,18 @@ namespace Gesco.API.Controllers
         {
             try
             {
+                if (!_creds.EstaConfigurado())
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        requiereCredenciales = true,
+                        mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta.",
+                        renovado = false
+                    });
+
                 var (ok, mensaje, renovado) = await _andeJwtConsultaService.AsegurarJwtAsync();
                 if (!ok)
-                    return StatusCode(401, new { ok = false, mensaje, renovado });
+                    return StatusCode(401, new { ok = false, mensaje, renovado, requiereCredenciales = !_creds.EstaConfigurado() });
                 return Ok(new { ok = true, mensaje, renovado });
             }
             catch (Exception ex)
@@ -117,6 +199,14 @@ namespace Gesco.API.Controllers
         {
             try
             {
+                if (!_creds.EstaConfigurado())
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        requiereCredenciales = true,
+                        mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
+                    });
+
                 var resultado = await _andeJwtConsultaService.ConsultarSaldoAsync(nis);
                 return Ok(resultado);
             }
@@ -135,6 +225,14 @@ namespace Gesco.API.Controllers
         {
             try
             {
+                if (!_creds.EstaConfigurado())
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        requiereCredenciales = true,
+                        mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
+                    });
+
                 var nisList = (body?.NisList ?? new List<string>())
                     .Select(n => new string((n ?? "").Where(char.IsDigit).ToArray()))
                     .Where(n => n.Length > 0)
@@ -146,7 +244,13 @@ namespace Gesco.API.Controllers
 
                 var (okSesion, mensajeSesion, renovado) = await _andeJwtConsultaService.AsegurarJwtAsync();
                 if (!okSesion)
-                    return StatusCode(401, new { ok = false, mensaje = mensajeSesion, renovado });
+                    return StatusCode(401, new
+                    {
+                        ok = false,
+                        mensaje = mensajeSesion,
+                        renovado,
+                        requiereCredenciales = !_creds.EstaConfigurado()
+                    });
 
                 var resultados = new List<object>();
                 foreach (var nis in nisList)
@@ -188,5 +292,12 @@ namespace Gesco.API.Controllers
     public class AndeConsultarLoteRequest
     {
         public List<string>? NisList { get; set; }
+    }
+
+    public class AndeCredencialesRequest
+    {
+        public string? Documento { get; set; }
+        public string? Password { get; set; }
+        public string? TipoDocumento { get; set; }
     }
 }
