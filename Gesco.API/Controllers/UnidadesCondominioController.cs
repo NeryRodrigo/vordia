@@ -47,11 +47,47 @@ namespace Gesco.API.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> PutUnidad(int id, UnidadCondominio unidad)
+        public async Task<IActionResult> PutUnidad(int id, [FromBody] UpdateUnidadRequest? request)
         {
-            if (id != unidad.UnidadId) return BadRequest();
-            await _unidadService.UpdateAsync(unidad);
-            return NoContent();
+            if (request == null) return BadRequest(new { message = "Body vacío" });
+
+            var existing = await _unidadService.GetByIdAsync(id);
+            if (existing == null) return NotFound(new { message = $"Unidad {id} no encontrada" });
+
+            var patch = new UnidadCondominio
+            {
+                UnidadId = id,
+                EmpresaId = request.EmpresaId is > 0 ? request.EmpresaId.Value : existing.EmpresaId,
+                NombreCondominio = string.IsNullOrWhiteSpace(request.NombreCondominio)
+                    ? existing.NombreCondominio
+                    : request.NombreCondominio.Trim(),
+                CodigoUnidad = string.IsNullOrWhiteSpace(request.CodigoUnidad)
+                    ? existing.CodigoUnidad
+                    : request.CodigoUnidad.Trim(),
+                Estado = string.IsNullOrWhiteSpace(request.Estado)
+                    ? existing.Estado
+                    : request.Estado.Trim(),
+                NisAnde = request.NisAnde,
+                MedidorAgua = request.MedidorAgua,
+                Observaciones = request.Observaciones ?? existing.Observaciones,
+            };
+
+            await _unidadService.UpdateAsync(patch);
+            var updated = await _unidadService.GetByIdAsync(id);
+            if (updated == null) return NotFound();
+
+            // Respuesta plana (sin grafo) para el front
+            return Ok(new
+            {
+                unidadId = updated.UnidadId,
+                empresaId = updated.EmpresaId,
+                nombreCondominio = updated.NombreCondominio,
+                codigoUnidad = updated.CodigoUnidad,
+                estado = updated.Estado,
+                nisAnde = updated.NisAnde,
+                medidorAgua = updated.MedidorAgua,
+                observaciones = updated.Observaciones,
+            });
         }
 
         [HttpDelete("{id}")]

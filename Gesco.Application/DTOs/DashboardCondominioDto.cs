@@ -51,6 +51,9 @@ namespace Gesco.Application.DTOs
         public decimal? MontoRestante { get; set; }
         public bool FacturaEmitida { get; set; }
         public string EstadoFactura => FacturaEmitida ? "Emitida" : "Pendiente";
+        /// <summary>Para listado Cobrado: Factura vs Recibo según emisión.</summary>
+        public string TipoComprobante => FacturaEmitida ? "Factura" : "Recibo";
+        public string? NumeroFactura { get; set; }
         public string TipoPago { get; set; }
         public DateTime? Fecha { get; set; }
         public int? MorosidadId { get; set; }

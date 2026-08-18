@@ -185,20 +185,26 @@ namespace Gesco.Application.Services
 
             dto.Summary.ObjetivoMes = dto.ObjetivosMes.Sum(x => x.Monto);
 
-            // Cobrado Mes: Pagos con fecha del mes actual (solo alquiler)
+            // Cobrado Mes: pagos del mes (alquiler) con tipo Factura/Recibo
             dto.Cobrados = ocupados.SelectMany(u => {
                 var c = u.Contratos.FirstOrDefault();
                 if (c == null) return new List<DashboardDetailDto>();
-                var pagosContrato = c.Pagos.Where(p => p.FechaPago.Month == currentMonth && p.FechaPago.Year == currentYear && (p.TipoPago == "Alquiler" || string.IsNullOrEmpty(p.TipoPago))).ToList();
+                var pagosContrato = c.Pagos.Where(p =>
+                    p.FechaPago.Month == currentMonth &&
+                    p.FechaPago.Year == currentYear &&
+                    (p.TipoPago == "Alquiler" || string.IsNullOrEmpty(p.TipoPago))).ToList();
                 return pagosContrato.Select(p => new DashboardDetailDto {
                     UnidadId = u.UnidadId,
                     Duplex = u.CodigoUnidad ?? "S/D",
                     Condominio = u.NombreCondominio ?? "Aguz",
                     Inquilino = c.Inquilino?.RazonSocial ?? "S/I",
                     Monto = p.MontoPagado,
-                    Fecha = p.FechaPago
+                    Fecha = p.FechaPago,
+                    FacturaEmitida = p.FacturaEmitida,
+                    NumeroFactura = p.NumeroFactura ?? p.NroComprobante,
+                    TipoPago = string.IsNullOrWhiteSpace(p.TipoPago) ? "Alquiler" : p.TipoPago
                 });
-            }).ToList();
+            }).OrderByDescending(x => x.Fecha).ToList();
 
             dto.Summary.CobradoMes = dto.Cobrados.Sum(x => x.Monto);
 
