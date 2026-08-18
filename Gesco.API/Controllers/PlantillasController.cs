@@ -350,10 +350,26 @@ namespace Gesco.API.Controllers
         }
 
         [HttpGet("generar-zip/{contratoId}")]
-        public async Task<IActionResult> GenerarTodosZip(int contratoId)
+        public async Task<IActionResult> GenerarTodosZip(int contratoId, [FromQuery] string? ids = null)
         {
             var plantillas = await SyncOfficialPlantillasAsync();
             if (plantillas.Count == 0) return NotFound("No hay plantillas registradas.");
+
+            // ids=1,2,3 → solo esas plantillas; si vacío → todas
+            HashSet<int>? filtroIds = null;
+            if (!string.IsNullOrWhiteSpace(ids))
+            {
+                filtroIds = ids
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(s => int.TryParse(s, out var n) ? n : 0)
+                    .Where(n => n > 0)
+                    .ToHashSet();
+                if (filtroIds.Count > 0)
+                    plantillas = plantillas.Where(p => filtroIds.Contains(p.PlantillaId)).ToList();
+            }
+
+            if (plantillas.Count == 0)
+                return BadRequest("Ninguna plantilla coincide con los ids indicados.");
 
             var queryVals = Request.Query.ToDictionary(
                 q => q.Key,
@@ -541,7 +557,26 @@ namespace Gesco.API.Controllers
                     values[kv.Key] = kv.Value;
             }
 
+            NormalizeUpperBoldValues(values);
             return values;
+        }
+
+        /// <summary>
+        /// Nombre del locatario/codeudor y sus domicilios van en MAYÚSCULAS en el contrato.
+        /// </summary>
+        private static readonly HashSet<string> UpperBoldPlaceholderKeys = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Locatario", "Codeudor", "DomicilioLocatario", "DomicilioCodeudor"
+        };
+
+        private static void NormalizeUpperBoldValues(Dictionary<string, string> values)
+        {
+            foreach (var key in UpperBoldPlaceholderKeys)
+            {
+                if (!values.TryGetValue(key, out var v) || string.IsNullOrWhiteSpace(v)) continue;
+                if (v.All(c => c == '_' || char.IsWhiteSpace(c))) continue;
+                values[key] = v.ToUpper(CulturaPy);
+            }
         }
 
         private static void ApplyReplacementsToDocument(WordprocessingDocument wordDoc, Dictionary<string, string> values)
@@ -578,7 +613,23 @@ namespace Gesco.API.Controllers
                 foreach (var para in root.Descendants<Paragraph>())
                 {
                     UnifyPlaceholderRuns(para);
-                    foreach (var textNode in para.Descendants<Text>())
+                    var texts = para.Descendants<Text>().ToList();
+                    if (texts.Count == 0) continue;
+
+                    var fullText = string.Concat(texts.Select(t => t.Text ?? ""));
+                    if (string.IsNullOrEmpty(fullText) || !fullText.Contains('{')) continue;
+
+                    var needsBoldSplit = UpperBoldPlaceholderKeys.Any(k =>
+                        fullText.Contains("{" + k + "}", StringComparison.OrdinalIgnoreCase) ||
+                        fullText.Contains("{{" + k + "}}", StringComparison.OrdinalIgnoreCase));
+
+                    if (needsBoldSplit)
+                    {
+                        ReplaceParagraphPlaceholdersWithBoldRuns(para, fullText, replacer);
+                        continue;
+                    }
+
+                    foreach (var textNode in texts)
                     {
                         var text = textNode.Text;
                         if (string.IsNullOrEmpty(text) || !text.Contains('{')) continue;
@@ -591,6 +642,72 @@ namespace Gesco.API.Controllers
                         textNode.Text = text;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Reemplaza placeholders en un párrafo y aplica negrita solo a Locatario/Codeudor/Domicilios.
+        /// </summary>
+        private static void ReplaceParagraphPlaceholdersWithBoldRuns(
+            Paragraph para,
+            string fullText,
+            Dictionary<string, string> replacer)
+        {
+            var segments = new List<(string Text, bool Bold)>();
+            var i = 0;
+            while (i < fullText.Length)
+            {
+                var brace = fullText.IndexOf('{', i);
+                if (brace < 0)
+                {
+                    segments.Add((fullText.Substring(i), false));
+                    break;
+                }
+
+                if (brace > i)
+                    segments.Add((fullText.Substring(i, brace - i), false));
+
+                string? matchedKey = null;
+                string? matchedVal = null;
+                var matchedLen = 0;
+                foreach (var item in replacer)
+                {
+                    if (fullText.AsSpan(brace).StartsWith(item.Key, StringComparison.OrdinalIgnoreCase)
+                        && item.Key.Length > matchedLen)
+                    {
+                        matchedKey = item.Key;
+                        matchedVal = item.Value;
+                        matchedLen = item.Key.Length;
+                    }
+                }
+
+                if (matchedKey != null)
+                {
+                    var keyClean = matchedKey.Trim('{', '}');
+                    var bold = UpperBoldPlaceholderKeys.Contains(keyClean);
+                    segments.Add((matchedVal ?? "", bold));
+                    i = brace + matchedLen;
+                }
+                else
+                {
+                    segments.Add(("{", false));
+                    i = brace + 1;
+                }
+            }
+
+            var pPr = para.GetFirstChild<ParagraphProperties>()?.CloneNode(true);
+            para.RemoveAllChildren();
+            if (pPr != null)
+                para.AppendChild(pPr);
+
+            foreach (var (seg, bold) in segments)
+            {
+                if (string.IsNullOrEmpty(seg)) continue;
+                var run = new Run();
+                if (bold)
+                    run.AppendChild(new RunProperties(new Bold()));
+                run.AppendChild(new Text(seg) { Space = SpaceProcessingModeValues.Preserve });
+                para.AppendChild(run);
             }
         }
 

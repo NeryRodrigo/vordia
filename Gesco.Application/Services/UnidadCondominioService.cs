@@ -46,8 +46,38 @@ namespace Gesco.Application.Services
 
         public async Task UpdateAsync(UnidadCondominio unidad)
         {
-            _context.UnidadesCondominio.Update(unidad);
+            var existing = await _context.UnidadesCondominio.FindAsync(unidad.UnidadId);
+            if (existing == null)
+                throw new KeyNotFoundException($"Unidad {unidad.UnidadId} no encontrada");
+
+            // Solo escalares: evita pisar el grafo (Contratos/Gastos) y corrupción de NIS.
+            if (unidad.EmpresaId > 0)
+                existing.EmpresaId = unidad.EmpresaId;
+            if (!string.IsNullOrWhiteSpace(unidad.CodigoUnidad))
+                existing.CodigoUnidad = unidad.CodigoUnidad.Trim();
+            if (!string.IsNullOrWhiteSpace(unidad.NombreCondominio))
+                existing.NombreCondominio = unidad.NombreCondominio.Trim();
+            if (!string.IsNullOrWhiteSpace(unidad.Estado))
+                existing.Estado = unidad.Estado.Trim();
+
+            existing.NisAnde = NormalizeNis(unidad.NisAnde);
+            existing.MedidorAgua = string.IsNullOrWhiteSpace(unidad.MedidorAgua)
+                ? null
+                : unidad.MedidorAgua.Trim();
+            if (unidad.Observaciones != null)
+                existing.Observaciones = unidad.Observaciones;
+
             await _context.SaveChangesAsync();
+        }
+
+        private static string? NormalizeNis(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var s = raw.Trim();
+            // Quita comillas accidentales al guardar / reenviar JSON
+            while ((s.StartsWith("\"") && s.EndsWith("\"")) || (s.StartsWith("'") && s.EndsWith("'")))
+                s = s.Substring(1, s.Length - 2).Trim();
+            return string.IsNullOrWhiteSpace(s) ? null : s;
         }
 
         public async Task DeleteAsync(int unidadId)
