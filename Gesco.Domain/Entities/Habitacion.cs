@@ -10,15 +10,16 @@ namespace Gesco.Domain.Entities
         public int HabitacionId { get; set; }
 
         public int EmpresaId { get; set; }
-        public virtual Empresa Empresa { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public virtual Empresa? Empresa { get; set; }
 
         [Required]
         [StringLength(100)]
-        public string Nombre { get; set; } // Ejemplo: "201", "Dormitorio Mixto"
+        public string Nombre { get; set; } = ""; // Ejemplo: "201", "Dormitorio Mixto"
 
         [Required]
         [StringLength(50)]
-        public string Tipo { get; set; } // Ejemplo: "Privada", "Compartida"
+        public string Tipo { get; set; } = ""; // Ejemplo: "Privada", "Compartida"
 
         public int CapacidadCamas { get; set; }
 
@@ -27,7 +28,7 @@ namespace Gesco.Domain.Entities
 
         [Required]
         [StringLength(50)]
-        public string Estado { get; set; } // "Disponible", "Ocupada", "Limpieza", "Mantenimiento"
+        public string Estado { get; set; } = "Disponible"; // "Disponible", "Ocupada", "Limpieza", "Mantenimiento"
 
         // Para flexibilidad en atributos (EAV dinámico)
         public string? DetallesJson { get; set; } // {"tieneAire": true, "tieneBañoPrivado": false}

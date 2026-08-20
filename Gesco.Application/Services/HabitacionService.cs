@@ -44,11 +44,19 @@ namespace Gesco.Application.Services
         public async Task DeleteAsync(int habitacionId)
         {
             var habitacion = await _context.Habitaciones.FindAsync(habitacionId);
-            if (habitacion != null)
+            if (habitacion == null) return;
+
+            // Reservas tiene FK Restrict → borrar primero las reservas de la habitación
+            var reservas = await _context.Reservas
+                .Where(r => r.HabitacionId == habitacionId)
+                .ToListAsync();
+            if (reservas.Count > 0)
             {
-                _context.Habitaciones.Remove(habitacion);
-                await _context.SaveChangesAsync();
+                _context.Reservas.RemoveRange(reservas);
             }
+
+            _context.Habitaciones.Remove(habitacion);
+            await _context.SaveChangesAsync();
         }
     }
 }

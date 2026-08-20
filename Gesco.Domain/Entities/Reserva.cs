@@ -10,25 +10,27 @@ namespace Gesco.Domain.Entities
         public int ReservaId { get; set; }
 
         public int EmpresaId { get; set; }
-        public virtual Empresa Empresa { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public virtual Empresa? Empresa { get; set; }
 
         public int HabitacionId { get; set; }
-        public virtual Habitacion Habitacion { get; set; }
+        public virtual Habitacion? Habitacion { get; set; }
 
         // El huésped principal (Persona con EsCliente = true)
         public int HuespedId { get; set; }
-        public virtual Persona Huesped { get; set; }
+        public virtual Persona? Huesped { get; set; }
 
         // El recepcionista que realizó la reserva
         public int? UsuarioId { get; set; }
-        public virtual Usuario Usuario { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public virtual Usuario? Usuario { get; set; }
 
         public DateTime FechaCheckIn { get; set; }
         public DateTime FechaCheckOut { get; set; }
 
         [Required]
         [StringLength(50)]
-        public string Estado { get; set; } // "Pendiente", "Confirmada", "CheckIn", "CheckOut", "Cancelada"
+        public string Estado { get; set; } = "Pendiente"; // "Pendiente", "Confirmada", "CheckIn", "CheckOut", "Cancelada"
 
         [Column(TypeName = "decimal(18,2)")]
         public decimal MontoTotalGs { get; set; }
