@@ -1,5 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Gesco.Application.Services;
+using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -7,6 +10,7 @@ namespace Gesco.API.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [EnableRateLimiting("uploads")]
     public class IntelligenceController : ControllerBase
     {
         private readonly DataIntelligenceService _intelligenceService;
@@ -16,10 +20,27 @@ namespace Gesco.API.Controllers
             _intelligenceService = intelligenceService;
         }
 
+        private static bool IsSafeFilePath(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) return false;
+            if (filePath.IndexOfAny(Path.GetInvalidPathChars()) >= 0) return false;
+            if (filePath.Contains("..", StringComparison.Ordinal)) return false;
+            // Solo rutas locales absolutas o relativas sin traversal
+            try
+            {
+                var full = Path.GetFullPath(filePath);
+                return System.IO.File.Exists(full) || Directory.Exists(full) || System.IO.File.Exists(filePath);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         [HttpGet("scan-binary")]
         public async Task<IActionResult> ScanBinary(string filePath)
         {
-            if (string.IsNullOrEmpty(filePath)) return BadRequest("Ruta de archivo no proporcionada.");
+            if (!IsSafeFilePath(filePath)) return BadRequest("Ruta de archivo no válida.");
             
             try 
             {
@@ -39,7 +60,7 @@ namespace Gesco.API.Controllers
         [HttpGet("preview-table")]
         public async Task<IActionResult> PreviewTable(string filePath, string tableName)
         {
-            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(tableName)) 
+            if (!IsSafeFilePath(filePath) || string.IsNullOrEmpty(tableName)) 
                 return BadRequest("Ruta de archivo y nombre de tabla son requeridos.");
             
             try 
@@ -80,7 +101,7 @@ namespace Gesco.API.Controllers
         [HttpGet("scan-relations")]
         public async Task<IActionResult> ScanRelations(string filePath)
         {
-            if (string.IsNullOrEmpty(filePath)) return BadRequest("Ruta de archivo no proporcionada.");
+            if (!IsSafeFilePath(filePath)) return BadRequest("Ruta de archivo no válida.");
             
             try 
             {
@@ -97,7 +118,7 @@ namespace Gesco.API.Controllers
         public async Task<IActionResult> EjecutarMigracionMapeada([FromBody] MigracionRequest request)
         {
             if (string.IsNullOrEmpty(request.NombreEmpresa)) return BadRequest("Nombre de empresa requerido.");
-            if (string.IsNullOrEmpty(request.FilePath)) return BadRequest("Ruta de archivo requerida.");
+            if (!IsSafeFilePath(request.FilePath)) return BadRequest("Ruta de archivo no válida.");
             if (request.Tablas == null || request.Tablas.Count == 0) return BadRequest("Debe seleccionar al menos una tabla para migrar.");
 
             try 

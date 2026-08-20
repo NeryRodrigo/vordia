@@ -1,16 +1,33 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Mvc.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Gesco.Application.Interfaces;
 using Gesco.Application.Services;
 using Gesco.Infrastructure.Persistence;
+using Gesco.API.Services;
 using System.IO.Compression;
+using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCors(options => {
-    options.AddPolicy("GescoPolicy", policy => {
-        policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
+    ?? new[] { "http://localhost:3000", "https://vordia.duckdns.org" };
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("GescoPolicy", policy =>
+    {
+        policy.WithOrigins(corsOrigins)
+            .AllowAnyMethod()
+            .AllowAnyHeader();
     });
 });
 
@@ -31,20 +48,105 @@ builder.Services.Configure<GzipCompressionProviderOptions>(options =>
     options.Level = CompressionLevel.Optimal;
 });
 
-builder.Services.AddControllers().AddJsonOptions(options =>
+// Límite global de uploads (~25 MB) — mitigación DoS
+builder.Services.Configure<FormOptions>(o =>
 {
-    // Esta línea corta los bucles infinitos automáticamente
+    o.MultipartBodyLengthLimit = 25 * 1024 * 1024;
+    o.ValueLengthLimit = 25 * 1024 * 1024;
+});
+builder.WebHost.ConfigureKestrel(o =>
+{
+    o.Limits.MaxRequestBodySize = 25 * 1024 * 1024;
+});
+
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? "Vordia_Dev_Only_Change_In_Production_Min_32_Chars!";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Vordia";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "VordiaWeb";
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+    options.AddPolicy("uploads", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 40,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+});
+
+builder.Services.AddControllers(options =>
+{
+    // Por defecto toda la API exige JWT; endpoints públicos usan [AllowAnonymous]
+    var policy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+    options.Filters.Add(new AuthorizeFilter(policy));
+}).AddJsonOptions(options =>
+{
     options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
 });
+
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "Vordia / Gesco API", Version = "v1" });
+    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Description = "JWT: Bearer {token}",
+        Name = "Authorization",
+        In = ParameterLocation.Header,
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
-
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IMigrationService, Gesco.Application.Services.MigrationService>();
 builder.Services.AddScoped<ICloudExtractionService, Gesco.Application.Services.CloudExtractionService>();
 builder.Services.AddHttpClient<IAiMappingService, Gesco.Application.Services.AiMappingService>();
 
-// Pagos SaaS (Strategy Pattern)
 builder.Services.AddScoped<IPaymentGatewayService, Gesco.Application.Services.StripePaymentService>();
 builder.Services.AddScoped<IPaymentGatewayService, Gesco.Application.Services.BancardPaymentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -75,15 +177,12 @@ builder.Services.AddHttpClient<IAndeJwtConsultaService, AndeJwtConsultaService>(
 {
     client.Timeout = TimeSpan.FromSeconds(90);
 });
-// AndeSyncBackgroundService desactivado: Chrome/ANDE solo al consultar saldo desde Gesco (bajo demanda).
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.AlquilerAlertasBackgroundService>();
 
 builder.Services.AddDbContext<GescoDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-
 builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<GescoDbContext>());
-
 
 var app = builder.Build();
 
@@ -98,6 +197,8 @@ if (app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseResponseCompression();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

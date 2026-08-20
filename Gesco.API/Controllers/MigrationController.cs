@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Gesco.Application.Interfaces;
 using Gesco.Application.DTOs;
 using Gesco.Domain.Entities;
@@ -38,6 +39,8 @@ namespace Gesco.API.Controllers
         }
 
         [HttpPost("upload-excel")]
+        [EnableRateLimiting("uploads")]
+        [RequestSizeLimit(25 * 1024 * 1024)]
         public async Task<IActionResult> UploadExcel(IFormFile file, [FromQuery] string tablaDestino, int empresaId)
         {
             // 1. Validaciones básicas
@@ -74,6 +77,8 @@ namespace Gesco.API.Controllers
         }
 
         [HttpPost("upload-condominio")]
+        [EnableRateLimiting("uploads")]
+        [RequestSizeLimit(25 * 1024 * 1024)]
         public async Task<IActionResult> UploadCondominio(IFormFile file, [FromQuery] int empresaId)
         {
             if (file == null || file.Length == 0)
@@ -105,8 +110,9 @@ namespace Gesco.API.Controllers
         }
 
         [HttpPost("upload-contratos")]
-        [DisableRequestSizeLimit]
-        [RequestFormLimits(ValueLengthLimit = int.MaxValue, MultipartBodyLengthLimit = int.MaxValue)]
+        [EnableRateLimiting("uploads")]
+        [RequestSizeLimit(50 * 1024 * 1024)]
+        [RequestFormLimits(ValueLengthLimit = 50 * 1024 * 1024, MultipartBodyLengthLimit = 50 * 1024 * 1024)]
         public async Task<IActionResult> UploadContratos(List<IFormFile> files, [FromQuery] int empresaId)
         {
             if (files == null || files.Count == 0)
