@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Gesco.Domain.Entities;
 using Gesco.Infrastructure.Persistence;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Gesco.API.Controllers
@@ -15,6 +17,10 @@ namespace Gesco.API.Controllers
     {
         private readonly GescoDbContext _context;
         private readonly string _storagePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "documents");
+        private static readonly HashSet<string> AllowedExt = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".doc", ".docx", ".xls", ".xlsx"
+        };
 
         public DocumentosController(GescoDbContext context)
         {
@@ -26,11 +32,21 @@ namespace Gesco.API.Controllers
         }
 
         [HttpPost("upload")]
+        [EnableRateLimiting("uploads")]
+        [RequestSizeLimit(15 * 1024 * 1024)]
         public async Task<IActionResult> UploadDocument([FromForm] int contratoId, [FromForm] string tipoDocumento, IFormFile file)
         {
             if (file == null || file.Length == 0) return BadRequest("No se ha proporcionado un archivo.");
+            if (file.Length > 15 * 1024 * 1024) return BadRequest("El archivo supera el límite de 15 MB.");
 
-            var fileName = $"{contratoId}_{tipoDocumento}_{Guid.NewGuid()}{Path.GetExtension(file.FileName)}";
+            var ext = Path.GetExtension(file.FileName);
+            if (string.IsNullOrEmpty(ext) || !AllowedExt.Contains(ext))
+                return BadRequest("Tipo de archivo no permitido.");
+
+            var safeTipo = string.Concat((tipoDocumento ?? "doc").Where(c => char.IsLetterOrDigit(c) || c == '_' || c == '-'));
+            if (string.IsNullOrEmpty(safeTipo)) safeTipo = "doc";
+
+            var fileName = $"{contratoId}_{safeTipo}_{Guid.NewGuid()}{ext.ToLowerInvariant()}";
             var filePath = Path.Combine(_storagePath, fileName);
 
             using (var stream = new FileStream(filePath, FileMode.Create))

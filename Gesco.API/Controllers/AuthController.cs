@@ -1,15 +1,11 @@
-using DocumentFormat.OpenXml.Math;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Gesco.Application.Interfaces;
-using Gesco.Domain.Entities;
-using Gesco.Infrastructure.Persistence;
-using BCrypt.Net;
-using Microsoft.EntityFrameworkCore;
 using Gesco.Application.DTOs;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using System;
+using Gesco.API.Services;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace Gesco.API.Controllers
 {
@@ -18,29 +14,32 @@ namespace Gesco.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IAuthService _authService;
+        private readonly IJwtTokenService _jwt;
 
-        // Ahora inyectamos el SERVICIO, no el Contexto
-        public AuthController(IAuthService authService)
+        public AuthController(IAuthService authService, IJwtTokenService jwt)
         {
             _authService = authService;
+            _jwt = jwt;
         }
 
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             try
             {
-                // Llamamos al servicio actualizado
                 var resultado = await _authService.RegisterAsync(request);
                 return Ok(resultado);
             }
             catch (Exception ex)
             {
-                // Si el correo ya existe o falla la transacción, el servicio lanza la excepción
                 return BadRequest(new { mensaje = ex.Message });
             }
         }
 
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -50,21 +49,24 @@ namespace Gesco.API.Controllers
                 if (result == null)
                     return Unauthorized(new { mensaje = "Credenciales inválidas" });
 
+                result.Token = _jwt.CreateToken(result);
                 return Ok(result);
             }
             catch (Exception ex)
             {
-                // Aquí capturamos el mensaje de "Cuenta bloqueada" y lo enviamos
                 return BadRequest(new { mensaje = ex.Message });
             }
         }
 
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpPost("google-login")]
         public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
         {
             try
             {
                 var result = await _authService.GoogleLoginAsync(request);
+                result.Token = _jwt.CreateToken(result);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -73,9 +75,24 @@ namespace Gesco.API.Controllers
             }
         }
 
+        [Authorize]
+        [EnableRateLimiting("auth")]
         [HttpPatch("update-password")]
         public async Task<IActionResult> UpdatePassword([FromBody] UpdatePasswordRequest request)
         {
+            var claimId = User.FindFirstValue(ClaimTypes.NameIdentifier)
+                ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+            if (!int.TryParse(claimId, out var authUserId) || authUserId <= 0)
+                return Unauthorized(new { mensaje = "Sesión inválida" });
+
+            var rol = User.FindFirstValue(ClaimTypes.Role) ?? "";
+            var esAdmin = rol.Equals("ADMIN", StringComparison.OrdinalIgnoreCase)
+                || rol.Equals("SUPERADMIN", StringComparison.OrdinalIgnoreCase);
+
+            // Propio usuario o administrador
+            if (request.UsuarioId != authUserId && !esAdmin)
+                return Forbid();
+
             var resultado = await _authService.UpdatePasswordAsync(request);
 
             if (resultado)
@@ -86,6 +103,7 @@ namespace Gesco.API.Controllers
             return BadRequest(new { mensaje = "No se pudo actualizar la contraseña." });
         }
 
+        [Authorize]
         [HttpGet("modulos/{usuarioId}")]
         public async Task<IActionResult> GetModulos(int usuarioId)
         {
@@ -98,11 +116,12 @@ namespace Gesco.API.Controllers
             }
             catch (Exception ex)
             {
-                // Devolvemos un 500 pero con el string exacto para ver qué ocurre.
-                return StatusCode(500, new { mensaje = ex.Message, stack = ex.StackTrace });
+                return StatusCode(500, new { mensaje = ex.Message });
             }
         }
 
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpGet("empresas")]
         public async Task<IActionResult> GetEmpresas()
         {

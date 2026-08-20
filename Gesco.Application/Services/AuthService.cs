@@ -86,7 +86,7 @@ namespace Gesco.Application.Services
             }
         }
 
-        public async Task<object> LoginAsync(LoginRequest request)
+        public async Task<AuthUserResponse?> LoginAsync(LoginRequest request)
         {
             var usuario = await _context.Usuarios
                                         .Include(u => u.Empresa)
@@ -104,10 +104,11 @@ namespace Gesco.Application.Services
             }
 
             // 3. Si está activo, devolvemos el objeto de éxito
-            return new
+            return new AuthUserResponse
             {
                 Id = usuario.UsuarioId,
                 Nombre = usuario.Nombre,
+                Email = usuario.Email,
                 Rol = usuario.Rol,
                 EmpresaId = usuario.EmpresaId,
                 RequiereCambioPass = usuario.RequiereCambioPass,
@@ -115,7 +116,7 @@ namespace Gesco.Application.Services
             };
         }
 
-        public async Task<object> GoogleLoginAsync(GoogleLoginRequest request)
+        public async Task<AuthUserResponse> GoogleLoginAsync(GoogleLoginRequest request)
         {
             if (string.IsNullOrEmpty(request.Email))
                 throw new Exception("El correo de Google no es válido.");
@@ -172,10 +173,11 @@ namespace Gesco.Application.Services
                 await _context.SaveChangesAsync();
             }
 
-            return new
+            return new AuthUserResponse
             {
                 Id = usuario.UsuarioId,
                 Nombre = usuario.Nombre,
+                Email = usuario.Email,
                 Rol = usuario.Rol,
                 EmpresaId = usuario.EmpresaId,
                 RequiereCambioPass = false,
