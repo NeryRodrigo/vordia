@@ -51,9 +51,16 @@ namespace Gesco.Application.Services
                 using var message = new MailMessage(fromAddress, toAddress)
                 {
                     Subject = $"{tipoLabel} N° {numeroComprobante} - {senderName}",
-                    IsBodyHtml = true,
-                    Body = GetHtmlBody(nombreCliente, numeroComprobante, tipoLabel, monto, concepto)
+                    IsBodyHtml = true
                 };
+
+                var htmlView = AlternateView.CreateAlternateViewFromString(
+                    GetHtmlBody(nombreCliente, numeroComprobante, tipoLabel, monto, concepto),
+                    Encoding.UTF8,
+                    MediaTypeNames.Text.Html);
+                AdjuntarLogoEmail(htmlView, "fontanas.png", "fontanaLogo");
+                AdjuntarLogoEmail(htmlView, "VORDIA H NEGRO.png", "vordiaLogo");
+                message.AlternateViews.Add(htmlView);
 
                 if (pdfAdjunto != null && pdfAdjunto.Length > 0)
                 {
@@ -88,38 +95,52 @@ namespace Gesco.Application.Services
         {
             var montoStr = monto.ToString("N0", new System.Globalization.CultureInfo("es-PY"));
             var tipoLabel = NormalizarTipoEmision(tipoEmision);
+            const string colorFondoApp = "#080E1E";
             return $@"
-            <div style='font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b;'>
-                <div style='text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 16px; margin-bottom: 24px;'>
-                    <h1 style='color: #0f172a; margin: 0; font-size: 24px; font-weight: 900;'>VORDIA</h1>
-                    <p style='color: #64748b; margin: 4px 0 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;'>Gestión de Alquileres y Administración</p>
-                </div>
+            <div style='font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 24px; color: #1e293b; background:#ffffff;'>
+                <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='border-collapse: collapse; border-bottom: 2px solid #0f172a; margin-bottom: 24px;'>
+                    <tr>
+                        <td width='72' valign='middle' style='padding: 0 12px 16px 0;'>
+                            <table role='presentation' cellpadding='0' cellspacing='0' style='border-collapse: collapse;'>
+                                <tr>
+                                    <td bgcolor='{colorFondoApp}' style='background-color: {colorFondoApp}; border-radius: 8px; padding: 8px; width: 64px; height: 64px; text-align: center;'>
+                                        <img src='cid:fontanaLogo' alt='Fontana' width='48' height='48' style='display: block; margin: 0 auto; border: 0; outline: none; max-width: 48px; height: auto;' />
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        <td align='left' valign='middle' style='padding: 0 0 16px 0;'>
+                            <p style='color: #1E7BFF; margin: 0; font-size: 12px; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;'>Fontana Di Luque</p>
+                            <p style='color: #64748b; margin: 4px 0 0 0; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;'>{tipoLabel} electrónico</p>
+                        </td>
+                    </tr>
+                </table>
                 <h2 style='color: #0f172a; font-size: 18px; margin-top: 0;'>¡Hola, {nombreCliente}!</h2>
                 <p style='font-size: 14px; line-height: 1.6; color: #475569;'>
                     Adjunto a este correo te enviamos el <strong>{tipoLabel}</strong> correspondiente a tu pago registrado en nuestro sistema.
                 </p>
-                <div style='background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin: 20px 0;'>
-                    <table style='width: 100%; font-size: 13px; border-collapse: collapse;'>
+                <div style='background-color: #f8fafc; border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #3b82f6;'>
+                    <table style='width: 100%; font-size: 14px; border-collapse: collapse;'>
                         <tr>
-                            <td style='padding: 6px 0; color: #64748b;'>Nº de Comprobante:</td>
-                            <td style='padding: 6px 0; font-weight: bold; color: #0f172a; text-align: right;'>{numeroComprobante}</td>
+                            <td style='padding: 8px 0; color: #64748b;'>N° Comprobante:</td>
+                            <td style='padding: 8px 0; text-align: right; font-weight: bold; color: #0f172a;'>{numeroComprobante}</td>
                         </tr>
                         <tr>
-                            <td style='padding: 6px 0; color: #64748b;'>Concepto:</td>
-                            <td style='padding: 6px 0; font-weight: bold; color: #0f172a; text-align: right;'>{concepto}</td>
+                            <td style='padding: 8px 0; color: #64748b;'>Concepto:</td>
+                            <td style='padding: 8px 0; text-align: right; font-weight: bold; color: #0f172a;'>{concepto}</td>
                         </tr>
                         <tr>
-                            <td style='padding: 6px 0; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 10px;'>Total Pagado:</td>
-                            <td style='padding: 6px 0; font-weight: 900; color: #16a34a; font-size: 16px; text-align: right; border-top: 1px solid #e2e8f0; padding-top: 10px;'>Gs. {montoStr}</td>
+                            <td style='padding: 8px 0; color: #64748b; border-top: 1px solid #e2e8f0;'>Monto:</td>
+                            <td style='padding: 8px 0; text-align: right; font-weight: 900; font-size: 18px; color: #059669; border-top: 1px solid #e2e8f0;'>Gs. {montoStr}</td>
                         </tr>
                     </table>
                 </div>
-                <p style='font-size: 13px; color: #64748b; margin-top: 24px;'>
-                    Si tienes alguna duda o consulta con respecto a este comprobante, puedes responder directamente a este correo o contactar con administración.
+                <p style='font-size: 12px; color: #94a3b8; text-align: center; margin-top: 32px;'>
+                    Este es un correo automático. Por favor no responda a este mensaje.<br/>
+                    Si tiene dudas, comuníquese con la administración.
                 </p>
-                <div style='border-top: 1px solid #e2e8f0; margin-top: 32px; padding-top: 16px; text-align: center; font-size: 11px; color: #94a3b8;'>
-                    <p style='margin: 0;'>Vordia — Administración Inmobiliaria</p>
-                    <p style='margin: 4px 0 0 0;'>Luque, Paraguay</p>
+                <div style='text-align: right; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e2e8f0;'>
+                    <img src='cid:vordiaLogo' alt='Vordia' width='56' height='56' style='display: inline-block; border: 0; outline: none;' />
                 </div>
             </div>";
         }
