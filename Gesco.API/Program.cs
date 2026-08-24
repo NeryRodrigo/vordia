@@ -64,6 +64,8 @@ var jwtKey = builder.Configuration["Jwt:Key"]
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Vordia";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "VordiaWeb";
 
+builder.Services.AddSingleton<ISessionEpochService, SessionEpochService>();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -77,6 +79,19 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ClockSkew = TimeSpan.FromMinutes(1)
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var epochSvc = context.HttpContext.RequestServices.GetRequiredService<ISessionEpochService>();
+                var sid = context.Principal?.FindFirst(JwtTokenService.SessionEpochClaim)?.Value;
+                if (string.IsNullOrEmpty(sid) || !string.Equals(sid, epochSvc.Epoch, StringComparison.Ordinal))
+                {
+                    context.Fail("Sesión invalidada por actualización del sistema. Inicie sesión nuevamente.");
+                }
+                return Task.CompletedTask;
+            }
         };
     });
 
