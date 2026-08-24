@@ -13,11 +13,15 @@ namespace Gesco.API.Services
 
     public class JwtTokenService : IJwtTokenService
     {
-        private readonly IConfiguration _config;
+        public const string SessionEpochClaim = "vordia_sid";
 
-        public JwtTokenService(IConfiguration config)
+        private readonly IConfiguration _config;
+        private readonly ISessionEpochService _sessionEpoch;
+
+        public JwtTokenService(IConfiguration config, ISessionEpochService sessionEpoch)
         {
             _config = config;
+            _sessionEpoch = sessionEpoch;
         }
 
         public string CreateToken(AuthUserResponse user)
@@ -34,6 +38,7 @@ namespace Gesco.API.Services
                 new(ClaimTypes.Name, user.Nombre ?? ""),
                 new(ClaimTypes.Role, user.Rol ?? "AGENTE"),
                 new("empresaId", user.EmpresaId.ToString()),
+                new(SessionEpochClaim, _sessionEpoch.Epoch),
             };
             if (!string.IsNullOrWhiteSpace(user.Email))
                 claims.Add(new Claim(ClaimTypes.Email, user.Email));
