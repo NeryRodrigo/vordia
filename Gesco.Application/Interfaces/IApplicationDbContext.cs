@@ -60,6 +60,13 @@ namespace Gesco.Application.Interfaces
         DbSet<ConfiguracionMulta> ConfiguracionesMultas { get; set; }
         DbSet<PlantillaDocumento> PlantillasDocumento { get; set; }
 
+        DbSet<CrmCliente> CrmClientes { get; set; }
+        DbSet<CrmHistorial> CrmHistorial { get; set; }
+        DbSet<CrmContrato> CrmContratos { get; set; }
+        DbSet<CrmPago> CrmPagos { get; set; }
+        DbSet<CrmTarea> CrmTareas { get; set; }
+        DbSet<CrmSocio> CrmSocios { get; set; }
+
         Task BulkInsertAsync(List<Propiedad> batch);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

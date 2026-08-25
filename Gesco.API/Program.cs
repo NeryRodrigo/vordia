@@ -181,6 +181,9 @@ builder.Services.AddScoped<ITesoreriaService, TesoreriaService>();
 builder.Services.AddScoped<IMorosidadService, MorosidadService>();
 builder.Services.AddScoped<DataIntelligenceService>();
 builder.Services.AddScoped<IActividadService, ActividadService>();
+builder.Services.AddScoped<ICrmService, CrmService>();
+builder.Services.AddScoped<ICrmFinanzasService, CrmFinanzasService>();
+builder.Services.AddScoped<ICrmOperacionService, CrmOperacionService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<IAndeCredentialsStore, AndeCredentialsStore>();
 builder.Services.AddHttpClient<IAndeScrapingService, AndeScrapingService>(client =>

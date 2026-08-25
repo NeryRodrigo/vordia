@@ -206,7 +206,9 @@ namespace Gesco.Application.Services
 
         public async Task<List<ModuloDto>> GetModulosPorUsuarioAsync(int usuarioId)
         {
-            var usuario = await _context.Usuarios.FindAsync(usuarioId);
+            var usuario = await _context.Usuarios
+                .Include(u => u.Empresa)
+                .FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
             if (usuario == null) return new List<ModuloDto>();
 
             var todosLosModulos = await _context.Modulos.ToListAsync();
@@ -221,8 +223,13 @@ namespace Gesco.Application.Services
             {
                 bool isContratado = false;
                 
-                // Bypass Total para Condominio Aguz (EmpresaId = 7) o Rol ADMIN
-                if (usuario.EmpresaId == 7 || usuario.Rol == "ADMIN" || usuario.Rol == "Admin" || usuario.Email.ToLower().Contains("rody.moran"))
+                // Bypass: Condominio Agus (7), Vordia Interno, o Rol ADMIN
+                var rubroEmpresa = usuario.Empresa?.Rubro?.ToUpperInvariant() ?? "";
+                if (usuario.EmpresaId == 7
+                    || rubroEmpresa == "VORDIA"
+                    || usuario.Rol == "ADMIN"
+                    || usuario.Rol == "Admin"
+                    || usuario.Email.ToLower().Contains("rody.moran"))
                 {
                     isContratado = true;
                 }
