@@ -61,6 +61,13 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<ConfiguracionMulta> ConfiguracionesMultas { get; set; }
         public DbSet<PlantillaDocumento> PlantillasDocumento { get; set; }
 
+        public DbSet<CrmCliente> CrmClientes { get; set; }
+        public DbSet<CrmHistorial> CrmHistorial { get; set; }
+        public DbSet<CrmContrato> CrmContratos { get; set; }
+        public DbSet<CrmPago> CrmPagos { get; set; }
+        public DbSet<CrmTarea> CrmTareas { get; set; }
+        public DbSet<CrmSocio> CrmSocios { get; set; }
+
         public async Task BulkInsertAsync(List<Propiedad> batch)
         {
             /*if (batch == null || batch.Count == 0)
@@ -89,6 +96,49 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<Actividad>().ToTable("Actividades");
             modelBuilder.Entity<ConfiguracionMulta>().ToTable("ConfiguracionesMultas");
             modelBuilder.Entity<PlantillaDocumento>().ToTable("PlantillasDocumento");
+            modelBuilder.Entity<CrmCliente>().ToTable("CrmClientes");
+            modelBuilder.Entity<CrmHistorial>().ToTable("CrmHistorial");
+            modelBuilder.Entity<CrmContrato>().ToTable("CrmContratos");
+            modelBuilder.Entity<CrmPago>().ToTable("CrmPagos");
+            modelBuilder.Entity<CrmTarea>().ToTable("CrmTareas");
+            modelBuilder.Entity<CrmSocio>().ToTable("CrmSocios");
+
+            modelBuilder.Entity<CrmCliente>()
+                .HasMany(c => c.Historial)
+                .WithOne(h => h.Cliente)
+                .HasForeignKey(h => h.ClienteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<CrmCliente>().Property(c => c.FeeEstimadoMensual).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmContrato>().Property(c => c.FeeAcordado).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmContrato>().Property(c => c.FeeMensual).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmContrato>().Property(c => c.FeeAnual).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmPago>().Property(p => p.Monto).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmSocio>().Property(s => s.Porcentaje).HasPrecision(5, 2);
+
+            modelBuilder.Entity<CrmContrato>()
+                .HasOne(c => c.Cliente)
+                .WithMany()
+                .HasForeignKey(c => c.ClienteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CrmPago>()
+                .HasOne(p => p.Contrato)
+                .WithMany()
+                .HasForeignKey(p => p.ContratoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CrmPago>()
+                .HasOne(p => p.Cliente)
+                .WithMany()
+                .HasForeignKey(p => p.ClienteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CrmTarea>()
+                .HasOne(t => t.Cliente)
+                .WithMany()
+                .HasForeignKey(t => t.ClienteId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // Aquí puedes configurar precisión de decimales para Guaraníes
             modelBuilder.Entity<Producto>().Property(p => p.PrecioVenta).HasColumnType("decimal(18,2)");
