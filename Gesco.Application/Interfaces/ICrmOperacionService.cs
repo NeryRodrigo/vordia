@@ -17,5 +17,13 @@ namespace Gesco.Application.Interfaces
         Task<bool> EliminarSocioAsync(int socioId, int empresaId);
 
         Task<CrmFlujoCajaDto> ObtenerFlujoCajaAsync(int empresaId);
+
+        Task<List<CrmRoadmapDto>> ListarRoadmapAsync(int empresaId, string? tipo = null, string? estado = null);
+        Task<CrmRoadmapDto?> ObtenerRoadmapAsync(int roadmapId, int empresaId);
+        Task<CrmRoadmapDto> CrearRoadmapAsync(CrmRoadmapUpsertRequest request);
+        Task<CrmRoadmapDto?> ActualizarRoadmapAsync(int roadmapId, CrmRoadmapUpsertRequest request);
+        Task<CrmRoadmapDto?> CambiarEstadoRoadmapAsync(int roadmapId, int empresaId, string estado, int? usuarioId = null, string? usuarioNombre = null);
+        Task<CrmRoadmapDto?> AgregarNotaRoadmapAsync(int roadmapId, CrmRoadmapNotaRequest request);
+        Task<bool> EliminarRoadmapAsync(int roadmapId, int empresaId);
     }
 }

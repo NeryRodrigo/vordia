@@ -66,6 +66,8 @@ namespace Gesco.Application.Interfaces
         DbSet<CrmPago> CrmPagos { get; set; }
         DbSet<CrmTarea> CrmTareas { get; set; }
         DbSet<CrmSocio> CrmSocios { get; set; }
+        DbSet<CrmRoadmap> CrmRoadmap { get; set; }
+        DbSet<CrmRoadmapHistorial> CrmRoadmapHistorial { get; set; }
 
         Task BulkInsertAsync(List<Propiedad> batch);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

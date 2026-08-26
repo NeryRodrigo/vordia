@@ -248,6 +248,236 @@ namespace Gesco.Application.Services
             };
         }
 
+        // --- Roadmap: Ideas & Alianzas ---
+        private static readonly string[] TiposRoadmap = { "Idea", "Alianza" };
+        private static readonly string[] EstadosRoadmap = { "Borrador", "En evaluacion", "Priorizado", "En curso", "Convertido", "Descartado" };
+        private static readonly string[] PrioridadesRoadmap = { "P0", "P1", "P2" };
+        private static readonly string[] ConvertidosA = { "Producto", "CRM", "Proyecto" };
+
+        public async Task<List<CrmRoadmapDto>> ListarRoadmapAsync(int empresaId, string? tipo = null, string? estado = null)
+        {
+            var query = _context.CrmRoadmap.AsNoTracking()
+                .Where(r => r.EmpresaId == empresaId && r.Activo);
+
+            if (!string.IsNullOrWhiteSpace(tipo))
+                query = query.Where(r => r.Tipo == tipo.Trim());
+            if (!string.IsNullOrWhiteSpace(estado))
+                query = query.Where(r => r.Estado == estado.Trim());
+
+            var list = await query
+                .OrderBy(r => r.Estado == "Convertido" || r.Estado == "Descartado")
+                .ThenBy(r => r.Prioridad == "P0" ? 0 : r.Prioridad == "P1" ? 1 : 2)
+                .ThenBy(r => r.FechaProximoPaso ?? DateTime.MaxValue)
+                .ThenByDescending(r => r.FechaRegistro)
+                .ToListAsync();
+
+            return list.Select(r => MapRoadmap(r, null)).ToList();
+        }
+
+        public async Task<CrmRoadmapDto?> ObtenerRoadmapAsync(int roadmapId, int empresaId)
+        {
+            var entity = await _context.CrmRoadmap.AsNoTracking()
+                .FirstOrDefaultAsync(r => r.RoadmapId == roadmapId && r.EmpresaId == empresaId && r.Activo);
+            if (entity == null) return null;
+
+            var hist = await _context.CrmRoadmapHistorial.AsNoTracking()
+                .Where(h => h.RoadmapId == roadmapId)
+                .OrderByDescending(h => h.Fecha)
+                .Take(50)
+                .ToListAsync();
+
+            return MapRoadmap(entity, hist);
+        }
+
+        public async Task<CrmRoadmapDto> CrearRoadmapAsync(CrmRoadmapUpsertRequest request)
+        {
+            var entity = new CrmRoadmap
+            {
+                EmpresaId = request.EmpresaId,
+                Tipo = Normalizar(request.Tipo, TiposRoadmap, "Idea"),
+                Titulo = request.Titulo.Trim(),
+                Descripcion = request.Descripcion,
+                Estado = Normalizar(request.Estado, EstadosRoadmap, "Borrador"),
+                Prioridad = Normalizar(request.Prioridad, PrioridadesRoadmap, "P2"),
+                ResponsableUsuarioId = request.ResponsableUsuarioId,
+                ResponsableNombre = request.ResponsableNombre?.Trim(),
+                FechaRegistro = (request.FechaRegistro ?? DateTime.UtcNow).Date,
+                FechaMeta = request.FechaMeta?.Date,
+                ProximoPaso = request.ProximoPaso?.Trim(),
+                FechaProximoPaso = request.FechaProximoPaso?.Date,
+                ConvertidoA = string.IsNullOrWhiteSpace(request.ConvertidoA)
+                    ? null
+                    : Normalizar(request.ConvertidoA, ConvertidosA, ConvertidosA[0]),
+                Notas = request.Notas,
+                Activo = true,
+                FechaCreacion = DateTime.UtcNow
+            };
+
+            _context.CrmRoadmap.Add(entity);
+            await _context.SaveChangesAsync();
+
+            _context.CrmRoadmapHistorial.Add(new CrmRoadmapHistorial
+            {
+                RoadmapId = entity.RoadmapId,
+                EmpresaId = entity.EmpresaId,
+                Tipo = "creacion",
+                Titulo = "Registro creado",
+                Detalle = $"{entity.Tipo}: {entity.Titulo}",
+                EstadoNuevo = entity.Estado,
+                UsuarioId = request.UsuarioId,
+                UsuarioNombre = request.UsuarioNombre,
+                Fecha = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+
+            return (await ObtenerRoadmapAsync(entity.RoadmapId, entity.EmpresaId))!;
+        }
+
+        public async Task<CrmRoadmapDto?> ActualizarRoadmapAsync(int roadmapId, CrmRoadmapUpsertRequest request)
+        {
+            var entity = await _context.CrmRoadmap
+                .FirstOrDefaultAsync(r => r.RoadmapId == roadmapId && r.EmpresaId == request.EmpresaId && r.Activo);
+            if (entity == null) return null;
+
+            var estadoAnterior = entity.Estado;
+            var estadoNuevo = Normalizar(request.Estado, EstadosRoadmap, entity.Estado);
+
+            entity.Tipo = Normalizar(request.Tipo, TiposRoadmap, entity.Tipo);
+            entity.Titulo = request.Titulo.Trim();
+            entity.Descripcion = request.Descripcion;
+            entity.Prioridad = Normalizar(request.Prioridad, PrioridadesRoadmap, entity.Prioridad);
+            entity.ResponsableUsuarioId = request.ResponsableUsuarioId;
+            entity.ResponsableNombre = request.ResponsableNombre?.Trim();
+            entity.FechaRegistro = (request.FechaRegistro ?? entity.FechaRegistro).Date;
+            entity.FechaMeta = request.FechaMeta?.Date;
+            entity.ProximoPaso = request.ProximoPaso?.Trim();
+            entity.FechaProximoPaso = request.FechaProximoPaso?.Date;
+            entity.ConvertidoA = string.IsNullOrWhiteSpace(request.ConvertidoA)
+                ? null
+                : Normalizar(request.ConvertidoA, ConvertidosA, ConvertidosA[0]);
+            entity.Notas = request.Notas;
+            entity.FechaActualizacion = DateTime.UtcNow;
+
+            if (estadoNuevo != estadoAnterior)
+            {
+                entity.Estado = estadoNuevo;
+                _context.CrmRoadmapHistorial.Add(new CrmRoadmapHistorial
+                {
+                    RoadmapId = entity.RoadmapId,
+                    EmpresaId = entity.EmpresaId,
+                    Tipo = "cambio_estado",
+                    Titulo = $"Estado → {estadoNuevo}",
+                    EstadoAnterior = estadoAnterior,
+                    EstadoNuevo = estadoNuevo,
+                    UsuarioId = request.UsuarioId,
+                    UsuarioNombre = request.UsuarioNombre,
+                    Fecha = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            return await ObtenerRoadmapAsync(roadmapId, request.EmpresaId);
+        }
+
+        public async Task<CrmRoadmapDto?> CambiarEstadoRoadmapAsync(int roadmapId, int empresaId, string estado, int? usuarioId = null, string? usuarioNombre = null)
+        {
+            var entity = await _context.CrmRoadmap
+                .FirstOrDefaultAsync(r => r.RoadmapId == roadmapId && r.EmpresaId == empresaId && r.Activo);
+            if (entity == null) return null;
+
+            var estadoAnterior = entity.Estado;
+            var estadoNuevo = Normalizar(estado, EstadosRoadmap, entity.Estado);
+            if (estadoNuevo == estadoAnterior) return await ObtenerRoadmapAsync(roadmapId, empresaId);
+
+            entity.Estado = estadoNuevo;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            _context.CrmRoadmapHistorial.Add(new CrmRoadmapHistorial
+            {
+                RoadmapId = entity.RoadmapId,
+                EmpresaId = entity.EmpresaId,
+                Tipo = "cambio_estado",
+                Titulo = $"Estado → {estadoNuevo}",
+                EstadoAnterior = estadoAnterior,
+                EstadoNuevo = estadoNuevo,
+                UsuarioId = usuarioId,
+                UsuarioNombre = usuarioNombre,
+                Fecha = DateTime.UtcNow
+            });
+            await _context.SaveChangesAsync();
+            return await ObtenerRoadmapAsync(roadmapId, empresaId);
+        }
+
+        public async Task<CrmRoadmapDto?> AgregarNotaRoadmapAsync(int roadmapId, CrmRoadmapNotaRequest request)
+        {
+            var entity = await _context.CrmRoadmap
+                .FirstOrDefaultAsync(r => r.RoadmapId == roadmapId && r.EmpresaId == request.EmpresaId && r.Activo);
+            if (entity == null) return null;
+
+            _context.CrmRoadmapHistorial.Add(new CrmRoadmapHistorial
+            {
+                RoadmapId = roadmapId,
+                EmpresaId = request.EmpresaId,
+                Tipo = "nota",
+                Titulo = request.Titulo.Trim(),
+                Detalle = request.Detalle,
+                UsuarioId = request.UsuarioId,
+                UsuarioNombre = request.UsuarioNombre,
+                Fecha = DateTime.UtcNow
+            });
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return await ObtenerRoadmapAsync(roadmapId, request.EmpresaId);
+        }
+
+        public async Task<bool> EliminarRoadmapAsync(int roadmapId, int empresaId)
+        {
+            var entity = await _context.CrmRoadmap
+                .FirstOrDefaultAsync(r => r.RoadmapId == roadmapId && r.EmpresaId == empresaId && r.Activo);
+            if (entity == null) return false;
+            entity.Activo = false;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private static CrmRoadmapDto MapRoadmap(CrmRoadmap r, List<CrmRoadmapHistorial>? hist)
+        {
+            var cerrados = r.Estado == "Convertido" || r.Estado == "Descartado";
+            return new CrmRoadmapDto
+            {
+                RoadmapId = r.RoadmapId,
+                EmpresaId = r.EmpresaId,
+                Tipo = r.Tipo,
+                Titulo = r.Titulo,
+                Descripcion = r.Descripcion,
+                Estado = r.Estado,
+                Prioridad = r.Prioridad,
+                ResponsableUsuarioId = r.ResponsableUsuarioId,
+                ResponsableNombre = r.ResponsableNombre,
+                FechaRegistro = r.FechaRegistro,
+                FechaMeta = r.FechaMeta,
+                ProximoPaso = r.ProximoPaso,
+                FechaProximoPaso = r.FechaProximoPaso,
+                ConvertidoA = r.ConvertidoA,
+                Notas = r.Notas,
+                FechaCreacion = r.FechaCreacion,
+                FechaActualizacion = r.FechaActualizacion,
+                VencidoProximoPaso = !cerrados && r.FechaProximoPaso.HasValue && r.FechaProximoPaso.Value.Date < DateTime.Today,
+                VencidaMeta = !cerrados && r.FechaMeta.HasValue && r.FechaMeta.Value.Date < DateTime.Today,
+                Historial = (hist ?? new List<CrmRoadmapHistorial>()).Select(h => new CrmRoadmapHistorialDto
+                {
+                    HistorialId = h.HistorialId,
+                    Tipo = h.Tipo,
+                    Titulo = h.Titulo,
+                    Detalle = h.Detalle,
+                    EstadoAnterior = h.EstadoAnterior,
+                    EstadoNuevo = h.EstadoNuevo,
+                    UsuarioNombre = h.UsuarioNombre,
+                    Fecha = h.Fecha
+                }).ToList()
+            };
+        }
+
         private static string Normalizar(string? value, string[] allowed, string fallback)
         {
             if (string.IsNullOrWhiteSpace(value)) return fallback;
