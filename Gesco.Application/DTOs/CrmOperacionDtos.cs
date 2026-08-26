@@ -102,5 +102,83 @@ namespace Gesco.Application.DTOs
     {
         [Required]
         public string Estado { get; set; } = string.Empty;
+
+        public int? UsuarioId { get; set; }
+        public string? UsuarioNombre { get; set; }
+    }
+
+    public class CrmRoadmapDto
+    {
+        public int RoadmapId { get; set; }
+        public int EmpresaId { get; set; }
+        public string Tipo { get; set; } = "Idea";
+        public string Titulo { get; set; } = string.Empty;
+        public string? Descripcion { get; set; }
+        public string Estado { get; set; } = "Borrador";
+        public string Prioridad { get; set; } = "P2";
+        public int? ResponsableUsuarioId { get; set; }
+        public string? ResponsableNombre { get; set; }
+        public DateTime FechaRegistro { get; set; }
+        public DateTime? FechaMeta { get; set; }
+        public string? ProximoPaso { get; set; }
+        public DateTime? FechaProximoPaso { get; set; }
+        public string? ConvertidoA { get; set; }
+        public string? Notas { get; set; }
+        public DateTime FechaCreacion { get; set; }
+        public DateTime? FechaActualizacion { get; set; }
+        public bool VencidoProximoPaso { get; set; }
+        public bool VencidaMeta { get; set; }
+        public List<CrmRoadmapHistorialDto> Historial { get; set; } = new();
+    }
+
+    public class CrmRoadmapHistorialDto
+    {
+        public int HistorialId { get; set; }
+        public string Tipo { get; set; } = "nota";
+        public string Titulo { get; set; } = string.Empty;
+        public string? Detalle { get; set; }
+        public string? EstadoAnterior { get; set; }
+        public string? EstadoNuevo { get; set; }
+        public string? UsuarioNombre { get; set; }
+        public DateTime Fecha { get; set; }
+    }
+
+    public class CrmRoadmapUpsertRequest
+    {
+        [Required]
+        public int EmpresaId { get; set; }
+
+        [Required]
+        public string Tipo { get; set; } = "Idea";
+
+        [Required]
+        public string Titulo { get; set; } = string.Empty;
+
+        public string? Descripcion { get; set; }
+        public string? Estado { get; set; }
+        public string? Prioridad { get; set; }
+        public int? ResponsableUsuarioId { get; set; }
+        public string? ResponsableNombre { get; set; }
+        public DateTime? FechaRegistro { get; set; }
+        public DateTime? FechaMeta { get; set; }
+        public string? ProximoPaso { get; set; }
+        public DateTime? FechaProximoPaso { get; set; }
+        public string? ConvertidoA { get; set; }
+        public string? Notas { get; set; }
+        public int? UsuarioId { get; set; }
+        public string? UsuarioNombre { get; set; }
+    }
+
+    public class CrmRoadmapNotaRequest
+    {
+        [Required]
+        public int EmpresaId { get; set; }
+
+        [Required]
+        public string Titulo { get; set; } = string.Empty;
+
+        public string? Detalle { get; set; }
+        public int? UsuarioId { get; set; }
+        public string? UsuarioNombre { get; set; }
     }
 }

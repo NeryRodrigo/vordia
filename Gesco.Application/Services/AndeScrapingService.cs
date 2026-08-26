@@ -1454,9 +1454,9 @@ namespace Gesco.Application.Services
                     await page.WaitForFunctionAsync(
                         "() => typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10 && typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
                         new WaitForFunctionOptions { Timeout = 30000 });
-                }
-                catch (Exception ex)
-                {
+            }
+            catch (Exception ex)
+            {
                     _logger.LogWarning(ex, "ANDE portal PDF: sin CLAVE_SITIO_WEB/grecaptcha");
                     return null;
                 }
@@ -1660,7 +1660,7 @@ namespace Gesco.Application.Services
             // 1. Enriquecer con datos locales del duplex (solo direccion/contexto)
             using var scope = _scopeFactory.CreateScope();
             var db = scope.ServiceProvider.GetService<IApplicationDbContext>();
-
+            
             string direccionLocal = "";
             if (db != null)
             {
