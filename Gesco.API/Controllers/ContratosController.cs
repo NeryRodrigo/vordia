@@ -283,26 +283,12 @@ namespace Gesco.API.Controllers
 
             if (ultimo == null) return NotFound(new { success = false, message = "No se encontró contrato" });
 
-            // 2. Ejecutamos la anulación normal del contrato (lo que ya tenías)
+            // AnularDesalojoAsync ya elimina morosidades pendientes y cobros restantes del desalojo
             var result = await _contratoService.AnularDesalojoAsync(ultimo.ContratoId);
 
             if (result)
             {
-                // 3. ¡LA CLAVE! Borrar las morosidades pendientes generadas por ese desalojo
-                // Buscamos deudas de este inquilino en esta unidad que NO estén pagadas
-                var morosidadesPrueba = await _context.MorosidadesInquilino
-                    .Where(m => m.UnidadId == unidadId
-                           && m.InquilinoId == ultimo.InquilinoId
-                           && m.Estado != "Pagado")
-                    .ToListAsync();
-
-                if (morosidadesPrueba.Any())
-                {
-                    _context.MorosidadesInquilino.RemoveRange(morosidadesPrueba);
-                    await _context.SaveChangesAsync();
-                }
-
-                return Ok(new { success = true, message = "Desalojo anulado y deudas de prueba eliminadas." });
+                return Ok(new { success = true, message = "Desalojo anulado. Historial y deudas pendientes restablecidos." });
             }
 
             return BadRequest(new { success = false, message = "No se pudo anular" });
