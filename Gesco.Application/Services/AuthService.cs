@@ -104,6 +104,11 @@ namespace Gesco.Application.Services
             }
 
             // 3. Si está activo, devolvemos el objeto de éxito
+            var modulosIds = await _context.UsuarioModulos
+                .Where(um => um.UsuarioId == usuario.UsuarioId)
+                .Select(um => um.ModuloId)
+                .ToListAsync();
+
             return new AuthUserResponse
             {
                 Id = usuario.UsuarioId,
@@ -112,7 +117,9 @@ namespace Gesco.Application.Services
                 Rol = usuario.Rol,
                 EmpresaId = usuario.EmpresaId,
                 RequiereCambioPass = usuario.RequiereCambioPass,
-                Rubro = usuario.Empresa.Rubro
+                Rubro = usuario.Empresa.Rubro,
+                PermisosIds = Gesco.Application.Helpers.PermisosJsonHelper.Parse(usuario.PermisosJson),
+                ModulosIds = modulosIds
             };
         }
 
@@ -173,6 +180,11 @@ namespace Gesco.Application.Services
                 await _context.SaveChangesAsync();
             }
 
+            var modulosIdsGoogle = await _context.UsuarioModulos
+                .Where(um => um.UsuarioId == usuario.UsuarioId)
+                .Select(um => um.ModuloId)
+                .ToListAsync();
+
             return new AuthUserResponse
             {
                 Id = usuario.UsuarioId,
@@ -181,7 +193,9 @@ namespace Gesco.Application.Services
                 Rol = usuario.Rol,
                 EmpresaId = usuario.EmpresaId,
                 RequiereCambioPass = false,
-                Rubro = usuario.Empresa?.Rubro ?? "RETAIL"
+                Rubro = usuario.Empresa?.Rubro ?? "RETAIL",
+                PermisosIds = Gesco.Application.Helpers.PermisosJsonHelper.Parse(usuario.PermisosJson),
+                ModulosIds = modulosIdsGoogle
             };
         }
 
@@ -217,30 +231,33 @@ namespace Gesco.Application.Services
                 .Select(l => l.ModuloId)
                 .ToListAsync();
 
+            var asignadosIds = await _context.UsuarioModulos
+                .Where(um => um.UsuarioId == usuarioId)
+                .Select(um => um.ModuloId)
+                .ToListAsync();
+
+            var esAdmin =
+                string.Equals(usuario.Rol, "ADMIN", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(usuario.Rol, "SUPERADMIN", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(usuario.Rol, "ADMINISTRADOR", StringComparison.OrdinalIgnoreCase)
+                || usuario.Email.ToLower().Contains("rody.moran");
+
             var result = new List<ModuloDto>();
 
             foreach (var mod in todosLosModulos)
             {
                 bool isContratado = false;
                 
-                // Bypass: Condominio Agus (7), Vordia Interno, o Rol ADMIN
                 var rubroEmpresa = usuario.Empresa?.Rubro?.ToUpperInvariant() ?? "";
                 if (usuario.EmpresaId == 7
                     || rubroEmpresa == "VORDIA"
-                    || usuario.Rol == "ADMIN"
-                    || usuario.Rol == "Admin"
-                    || usuario.Email.ToLower().Contains("rody.moran"))
+                    || esAdmin)
                 {
                     isContratado = true;
                 }
-                else
+                else if (licenciasActivas.Contains(mod.ModuloId))
                 {
-                    // Core modules can be free or based on license. Let's assume all modules require license except Config, or if they have the license ID.
-                    // For now, if they have a license in the DB, it's contracted.
-                    if (licenciasActivas.Contains(mod.ModuloId))
-                    {
-                        isContratado = true;
-                    }
+                    isContratado = true;
                 }
 
                 result.Add(new ModuloDto
@@ -249,7 +266,8 @@ namespace Gesco.Application.Services
                     NombreModulo = mod.NombreModulo,
                     Icono = mod.Icono,
                     RutaFrontend = mod.RutaFrontend,
-                    IsContratado = isContratado
+                    IsContratado = isContratado,
+                    IsAsignado = esAdmin || asignadosIds.Contains(mod.ModuloId)
                 });
             }
 

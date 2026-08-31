@@ -1,8 +1,6 @@
 ﻿using Gesco.Application.DTOs;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Gesco.Application.Interfaces
@@ -14,5 +12,7 @@ namespace Gesco.Application.Interfaces
         Task<bool> EliminarUsuarioAsync(int usuarioId);
 
         Task<bool> ActualizarUsuarioCompletoAsync(ActualizarUsuarioRequest request);
+        Task<List<string>> GetPermisosUsuarioAsync(int usuarioId);
+        Task<bool> GuardarPermisosUsuarioAsync(int usuarioId, List<string> permisosIds);
     }
 }
