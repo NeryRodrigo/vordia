@@ -70,6 +70,8 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<CrmRoadmap> CrmRoadmap { get; set; }
         public DbSet<CrmRoadmapHistorial> CrmRoadmapHistorial { get; set; }
         public DbSet<FichaIncompleta> FichasIncompletas { get; set; }
+        public DbSet<FontanaMovimiento> FontanaMovimientos { get; set; }
+        public DbSet<FontanaPersonal> FontanaPersonal { get; set; }
 
         public async Task BulkInsertAsync(List<Propiedad> batch)
         {
@@ -108,6 +110,10 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<CrmRoadmap>().ToTable("CrmRoadmap");
             modelBuilder.Entity<CrmRoadmapHistorial>().ToTable("CrmRoadmapHistorial");
             modelBuilder.Entity<FichaIncompleta>().ToTable("FichasIncompletas");
+            modelBuilder.Entity<FontanaMovimiento>().ToTable("FontanaMovimientos");
+            modelBuilder.Entity<FontanaPersonal>().ToTable("FontanaPersonal");
+            modelBuilder.Entity<FontanaMovimiento>().Property(m => m.Monto).HasPrecision(18, 2);
+            modelBuilder.Entity<FontanaPersonal>().Property(p => p.Salario).HasPrecision(18, 2);
 
             modelBuilder.Entity<CrmCliente>()
                 .HasMany(c => c.Historial)

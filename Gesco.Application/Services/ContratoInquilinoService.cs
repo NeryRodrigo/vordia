@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Gesco.Application.Interfaces;
 using Gesco.Domain.Entities;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace Gesco.Application.Services
@@ -269,12 +270,41 @@ namespace Gesco.Application.Services
                 dbContrato.Unidad.Estado = "Ocupado";
             }
 
-            // Restablecer estado de morosidad si correspondiese o actualizar EstaDesalojado
-            var morosidades = await _context.MorosidadesInquilino
+            // Anular cobros restantes registrados en el flujo de desalojo (restablece historial de cuotas)
+            const string marcaCobroRestante = "[DESALOJO_COBRO_RESTANTE]";
+            var cobrosRestantes = await _context.PagosRecibos
+                .Where(p => p.ContratoId == contratoId
+                         && p.Notas != null
+                         && p.Notas.Contains(marcaCobroRestante))
+                .ToListAsync();
+            if (cobrosRestantes.Count > 0)
+            {
+                _context.PagosRecibos.RemoveRange(cobrosRestantes);
+            }
+
+            // Quitar morosidades aún no pagadas generadas por el desalojo (cuotas vuelven al historial)
+            var morosidadesPendientes = await _context.MorosidadesInquilino
+                .Include(m => m.Cuotas)
+                .Where(m => m.UnidadId == dbContrato.UnidadId
+                         && m.InquilinoId == dbContrato.InquilinoId
+                         && m.Estado != "Pagado")
+                .ToListAsync();
+            if (morosidadesPendientes.Count > 0)
+            {
+                foreach (var mor in morosidadesPendientes)
+                {
+                    if (mor.Cuotas != null && mor.Cuotas.Count > 0)
+                        _context.CuotasMorosidad.RemoveRange(mor.Cuotas);
+                }
+                _context.MorosidadesInquilino.RemoveRange(morosidadesPendientes);
+            }
+
+            // Restablecer flag EstaDesalojado en morosidades que se conservan (ya pagadas)
+            var morosidadesRestantes = await _context.MorosidadesInquilino
                 .Where(m => m.InquilinoId == dbContrato.InquilinoId || m.UnidadId == dbContrato.UnidadId)
                 .ToListAsync();
 
-            foreach (var mor in morosidades)
+            foreach (var mor in morosidadesRestantes)
             {
                 mor.EstaDesalojado = false;
             }
