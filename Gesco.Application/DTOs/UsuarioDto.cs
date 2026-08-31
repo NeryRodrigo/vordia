@@ -19,5 +19,6 @@ namespace Gesco.Application.DTOs
         // Ejemplo: "Juan Pérez" -> "JP"
         public string Iniciales { get; set; }
         public List<int> ModulosIds { get; set; } = new List<int>();
+        public List<string> PermisosIds { get; set; } = new List<string>();
     }
 }

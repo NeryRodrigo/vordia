@@ -49,6 +49,12 @@ namespace Gesco.Domain.Entities
 
         public DateTime? UltimaConexion { get; set; }
 
+        /// <summary>
+        /// JSON array de ids de permisos granulares (ej: ["fontana_ver","condo_registrar_pago"]).
+        /// Null = sin matriz guardada (el front puede tratarlo como acceso total o vacío según rol).
+        /// </summary>
+        public string? PermisosJson { get; set; }
+
         // Relación con los módulos específicos que este usuario tiene permitidos
         public virtual ICollection<UsuarioModulo> UsuarioModulos { get; set; }
     }

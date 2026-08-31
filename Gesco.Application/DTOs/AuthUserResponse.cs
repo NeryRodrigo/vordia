@@ -10,5 +10,7 @@ namespace Gesco.Application.DTOs
         public bool RequiereCambioPass { get; set; }
         public string Rubro { get; set; } = "RETAIL";
         public string? Token { get; set; }
+        public List<string> PermisosIds { get; set; } = new List<string>();
+        public List<int> ModulosIds { get; set; } = new List<int>();
     }
 }

@@ -2,6 +2,8 @@
 using Gesco.Application.DTOs;
 using Gesco.Application.Interfaces;
 using Gesco.Application.Services;
+using System;
+using System.Collections.Generic;
 
 namespace Gesco.API.Controllers
 {
@@ -78,6 +80,26 @@ namespace Gesco.API.Controllers
             {
                 return BadRequest(new { mensaje = ex.Message });
             }
+        }
+
+        [HttpGet("{usuarioId}/permisos")]
+        public async Task<IActionResult> GetPermisos(int usuarioId)
+        {
+            var permisos = await _usuarioService.GetPermisosUsuarioAsync(usuarioId);
+            return Ok(new { usuarioId, permisosIds = permisos });
+        }
+
+        public class GuardarPermisosRequest
+        {
+            public List<string> PermisosIds { get; set; } = new();
+        }
+
+        [HttpPut("{usuarioId}/permisos")]
+        public async Task<IActionResult> GuardarPermisos(int usuarioId, [FromBody] GuardarPermisosRequest request)
+        {
+            var ok = await _usuarioService.GuardarPermisosUsuarioAsync(usuarioId, request?.PermisosIds ?? new List<string>());
+            if (!ok) return NotFound(new { mensaje = "Usuario no encontrado" });
+            return Ok(new { mensaje = "Permisos actualizados", usuarioId, permisosIds = request?.PermisosIds ?? new List<string>() });
         }
     }
 }

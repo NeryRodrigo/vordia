@@ -13,5 +13,7 @@ namespace Gesco.Application.DTOs
         public string Icono { get; set; } // ej: "LayoutDashboard", "Users"
         public string RutaFrontend { get; set; } // ej: "/dashboard/usuarios"
         public bool IsContratado { get; set; } = false;
+        /// <summary>True si el usuario tiene el módulo en UsuarioModulos (o es ADMIN).</summary>
+        public bool IsAsignado { get; set; } = false;
     }
 }
