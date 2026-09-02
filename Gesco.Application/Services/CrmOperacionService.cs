@@ -510,5 +510,463 @@ namespace Gesco.Application.Services
                 Vencida = vencida
             };
         }
+
+        // ---------- Capital / Empleados / Objetivos ----------
+
+        public async Task<CrmCapitalResumenDto> ObtenerCapitalAsync(int empresaId)
+        {
+            var movs = await _context.CrmCapitalMovimientos.AsNoTracking()
+                .Where(c => c.EmpresaId == empresaId && c.Activo)
+                .OrderByDescending(c => c.Fecha)
+                .ThenByDescending(c => c.CapitalId)
+                .ToListAsync();
+
+            decimal aportes = 0, retiros = 0, saldo = 0;
+            foreach (var m in movs)
+            {
+                if (m.Tipo == "Retiro") { retiros += m.MontoGs; saldo -= m.MontoGs; }
+                else { aportes += m.MontoGs; saldo += m.MontoGs; } // Aporte, Ajuste, Valuacion suman
+            }
+
+            return new CrmCapitalResumenDto
+            {
+                SaldoCapitalGs = saldo,
+                TotalAportes = aportes,
+                TotalRetiros = retiros,
+                Movimientos = movs.Select(m => new CrmCapitalDto
+                {
+                    CapitalId = m.CapitalId,
+                    EmpresaId = m.EmpresaId,
+                    Tipo = m.Tipo,
+                    MontoGs = m.MontoGs,
+                    Fecha = m.Fecha,
+                    Concepto = m.Concepto,
+                    SocioId = m.SocioId,
+                    UsuarioNombre = m.UsuarioNombre,
+                    Notas = m.Notas
+                }).ToList()
+            };
+        }
+
+        public async Task<CrmCapitalDto> RegistrarCapitalAsync(CrmCapitalUpsertRequest request)
+        {
+            var tipo = Normalizar(request.Tipo, new[] { "Aporte", "Retiro", "Ajuste", "Valuacion" }, "Aporte");
+            var entity = new CrmCapitalMovimiento
+            {
+                EmpresaId = request.EmpresaId,
+                Tipo = tipo,
+                MontoGs = Math.Abs(request.MontoGs),
+                Fecha = (request.Fecha ?? DateTime.Today).Date,
+                Concepto = string.IsNullOrWhiteSpace(request.Concepto) ? tipo : request.Concepto.Trim(),
+                SocioId = request.SocioId,
+                UsuarioNombre = request.UsuarioNombre,
+                Notas = request.Notas,
+                Activo = true,
+                FechaCreacion = DateTime.UtcNow
+            };
+            _context.CrmCapitalMovimientos.Add(entity);
+            await _context.SaveChangesAsync();
+            return new CrmCapitalDto
+            {
+                CapitalId = entity.CapitalId,
+                EmpresaId = entity.EmpresaId,
+                Tipo = entity.Tipo,
+                MontoGs = entity.MontoGs,
+                Fecha = entity.Fecha,
+                Concepto = entity.Concepto,
+                SocioId = entity.SocioId,
+                UsuarioNombre = entity.UsuarioNombre,
+                Notas = entity.Notas
+            };
+        }
+
+        public async Task<bool> EliminarCapitalAsync(int capitalId, int empresaId)
+        {
+            var e = await _context.CrmCapitalMovimientos.FirstOrDefaultAsync(c => c.CapitalId == capitalId && c.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<CrmEmpleadosResumenDto> ListarEmpleadosHqAsync(int empresaId)
+        {
+            var list = await _context.CrmEmpleadosHq.AsNoTracking()
+                .Where(e => e.EmpresaId == empresaId && e.Activo)
+                .OrderBy(e => e.Nombre)
+                .ToListAsync();
+            var dtos = list.Select(e => new CrmEmpleadoHqDto
+            {
+                EmpleadoHqId = e.EmpleadoHqId,
+                EmpresaId = e.EmpresaId,
+                Nombre = e.Nombre,
+                RolCargo = e.RolCargo,
+                Email = e.Email,
+                Telefono = e.Telefono,
+                SalarioMensualGs = e.SalarioMensualGs,
+                FechaIngreso = e.FechaIngreso,
+                Estado = e.Estado,
+                Notas = e.Notas
+            }).ToList();
+            var activos = dtos.Where(d => d.Estado == "Activo").ToList();
+            return new CrmEmpleadosResumenDto
+            {
+                CantidadActivos = activos.Count,
+                NominaMensualGs = activos.Sum(a => a.SalarioMensualGs),
+                Empleados = dtos
+            };
+        }
+
+        public async Task<CrmEmpleadoHqDto> UpsertEmpleadoHqAsync(CrmEmpleadoHqUpsertRequest request, int? empleadoId = null)
+        {
+            CrmEmpleadoHq entity;
+            if (empleadoId.HasValue)
+            {
+                entity = await _context.CrmEmpleadosHq.FirstOrDefaultAsync(e =>
+                    e.EmpleadoHqId == empleadoId.Value && e.EmpresaId == request.EmpresaId)
+                    ?? throw new InvalidOperationException("Empleado no encontrado");
+            }
+            else
+            {
+                entity = new CrmEmpleadoHq { EmpresaId = request.EmpresaId, FechaCreacion = DateTime.UtcNow };
+                _context.CrmEmpleadosHq.Add(entity);
+            }
+
+            entity.Nombre = request.Nombre.Trim();
+            entity.RolCargo = string.IsNullOrWhiteSpace(request.RolCargo) ? "Colaborador" : request.RolCargo.Trim();
+            entity.Email = request.Email;
+            entity.Telefono = request.Telefono;
+            entity.SalarioMensualGs = request.SalarioMensualGs;
+            entity.FechaIngreso = request.FechaIngreso?.Date;
+            entity.Estado = Normalizar(request.Estado, new[] { "Activo", "Inactivo", "Licencia" }, "Activo");
+            entity.Notas = request.Notas;
+            entity.Activo = true;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return new CrmEmpleadoHqDto
+            {
+                EmpleadoHqId = entity.EmpleadoHqId,
+                EmpresaId = entity.EmpresaId,
+                Nombre = entity.Nombre,
+                RolCargo = entity.RolCargo,
+                Email = entity.Email,
+                Telefono = entity.Telefono,
+                SalarioMensualGs = entity.SalarioMensualGs,
+                FechaIngreso = entity.FechaIngreso,
+                Estado = entity.Estado,
+                Notas = entity.Notas
+            };
+        }
+
+        public async Task<bool> EliminarEmpleadoHqAsync(int empleadoId, int empresaId)
+        {
+            var e = await _context.CrmEmpleadosHq.FirstOrDefaultAsync(x => x.EmpleadoHqId == empleadoId && x.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            e.Estado = "Inactivo";
+            e.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<CrmObjetivoDto>> ListarObjetivosAsync(int empresaId, string? ambito = null, int? tareaId = null)
+        {
+            var q = _context.CrmObjetivos.AsNoTracking().Where(o => o.EmpresaId == empresaId && o.Activo);
+            if (!string.IsNullOrWhiteSpace(ambito))
+                q = q.Where(o => o.Ambito == ambito.Trim());
+            if (tareaId.HasValue)
+                q = q.Where(o => o.TareaId == tareaId.Value);
+
+            var list = await q.OrderByDescending(o => o.Prioridad == "Alta")
+                .ThenBy(o => o.FechaObjetivo ?? DateTime.MaxValue)
+                .ToListAsync();
+
+            var clienteIds = list.Where(o => o.ClienteId.HasValue).Select(o => o.ClienteId!.Value).Distinct().ToList();
+            var tareaIds = list.Where(o => o.TareaId.HasValue).Select(o => o.TareaId!.Value).Distinct().ToList();
+            var clientes = await _context.CrmClientes.AsNoTracking()
+                .Where(c => clienteIds.Contains(c.ClienteId))
+                .ToDictionaryAsync(c => c.ClienteId, c => c.RazonSocial);
+            var tareas = await _context.CrmTareas.AsNoTracking()
+                .Where(t => tareaIds.Contains(t.TareaId))
+                .ToDictionaryAsync(t => t.TareaId, t => t.Titulo);
+
+            return list.Select(o => new CrmObjetivoDto
+            {
+                ObjetivoId = o.ObjetivoId,
+                EmpresaId = o.EmpresaId,
+                Ambito = o.Ambito,
+                Titulo = o.Titulo,
+                Descripcion = o.Descripcion,
+                NotasReunion = o.NotasReunion,
+                Estado = o.Estado,
+                Prioridad = o.Prioridad,
+                FechaObjetivo = o.FechaObjetivo,
+                ClienteId = o.ClienteId,
+                ClienteNombre = o.ClienteId.HasValue && clientes.ContainsKey(o.ClienteId.Value) ? clientes[o.ClienteId.Value] : null,
+                TareaId = o.TareaId,
+                TareaTitulo = o.TareaId.HasValue && tareas.ContainsKey(o.TareaId.Value) ? tareas[o.TareaId.Value] : null,
+                CreadoPor = o.CreadoPor,
+                FechaActualizacion = o.FechaActualizacion
+            }).ToList();
+        }
+
+        public async Task<CrmObjetivoDto> UpsertObjetivoAsync(CrmObjetivoUpsertRequest request, int? objetivoId = null)
+        {
+            CrmObjetivo entity;
+            if (objetivoId.HasValue)
+            {
+                entity = await _context.CrmObjetivos.FirstOrDefaultAsync(o =>
+                    o.ObjetivoId == objetivoId.Value && o.EmpresaId == request.EmpresaId)
+                    ?? throw new InvalidOperationException("Objetivo no encontrado");
+            }
+            else
+            {
+                entity = new CrmObjetivo { EmpresaId = request.EmpresaId, FechaCreacion = DateTime.UtcNow };
+                _context.CrmObjetivos.Add(entity);
+            }
+
+            entity.Ambito = Normalizar(request.Ambito, new[] { "Empresa", "Crm", "Tarea" }, "Empresa");
+            entity.Titulo = request.Titulo.Trim();
+            entity.Descripcion = request.Descripcion;
+            entity.NotasReunion = request.NotasReunion;
+            entity.Estado = Normalizar(request.Estado, new[] { "Pendiente", "En curso", "Logrado", "Pausado", "Cancelado" }, "Pendiente");
+            entity.Prioridad = Normalizar(request.Prioridad, Prioridades, "Media");
+            entity.FechaObjetivo = request.FechaObjetivo?.Date;
+            entity.ClienteId = request.ClienteId;
+            entity.TareaId = request.TareaId;
+            if (!string.IsNullOrWhiteSpace(request.CreadoPor))
+                entity.CreadoPor = request.CreadoPor;
+            entity.Activo = true;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            var list = await ListarObjetivosAsync(request.EmpresaId);
+            return list.First(o => o.ObjetivoId == entity.ObjetivoId);
+        }
+
+        public async Task<bool> EliminarObjetivoAsync(int objetivoId, int empresaId)
+        {
+            var e = await _context.CrmObjetivos.FirstOrDefaultAsync(o => o.ObjetivoId == objetivoId && o.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            e.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private static readonly string[] EstadosProducto = { "Activo", "En desarrollo", "Planificado", "Pausado" };
+        private static readonly string[] PrioridadesP = { "P0", "P1", "P2" };
+        private static readonly string[] EstadosProveedor = { "Activo", "Inactivo", "Prospecto" };
+        private static readonly string[] EstadosProyecto = { "Planificado", "En curso", "Pausado", "Hecho", "Cancelado" };
+
+        public async Task<List<CrmProductoDto>> ListarProductosAsync(int empresaId)
+        {
+            var list = await _context.CrmProductos.AsNoTracking()
+                .Where(p => p.EmpresaId == empresaId && p.Activo)
+                .OrderBy(p => p.Orden).ThenBy(p => p.Nombre)
+                .ToListAsync();
+            return list.Select(MapProducto).ToList();
+        }
+
+        public async Task<CrmProductoDto> UpsertProductoAsync(CrmProductoUpsertRequest request, int? productoId = null)
+        {
+            CrmProducto entity;
+            if (productoId.HasValue)
+            {
+                entity = await _context.CrmProductos.FirstOrDefaultAsync(p =>
+                    p.ProductoId == productoId.Value && p.EmpresaId == request.EmpresaId && p.Activo)
+                    ?? throw new InvalidOperationException("Producto no encontrado");
+            }
+            else
+            {
+                entity = new CrmProducto { EmpresaId = request.EmpresaId, FechaCreacion = DateTime.UtcNow };
+                _context.CrmProductos.Add(entity);
+            }
+
+            entity.Codigo = (request.Codigo ?? "").Trim().ToUpperInvariant();
+            entity.Nombre = request.Nombre.Trim();
+            entity.Significado = request.Significado;
+            entity.QueSera = request.QueSera;
+            entity.QueIncluye = request.QueIncluye;
+            entity.IdeaCentral = request.IdeaCentral;
+            entity.Estado = Normalizar(request.Estado, EstadosProducto, "Planificado");
+            entity.Prioridad = Normalizar(request.Prioridad, PrioridadesP, "P2");
+            entity.FeeEstimadoGs = request.FeeEstimadoGs;
+            entity.Orden = request.Orden;
+            entity.Notas = request.Notas;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return MapProducto(entity);
+        }
+
+        public async Task<bool> EliminarProductoAsync(int productoId, int empresaId)
+        {
+            var e = await _context.CrmProductos.FirstOrDefaultAsync(p => p.ProductoId == productoId && p.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            e.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<CrmProveedorDto>> ListarProveedoresAsync(int empresaId, string? estado = null)
+        {
+            var q = _context.CrmProveedores.AsNoTracking().Where(p => p.EmpresaId == empresaId && p.Activo);
+            if (!string.IsNullOrWhiteSpace(estado))
+                q = q.Where(p => p.Estado == estado);
+            var list = await q.OrderBy(p => p.Nombre).ToListAsync();
+            return list.Select(MapProveedor).ToList();
+        }
+
+        public async Task<CrmProveedorDto> UpsertProveedorAsync(CrmProveedorUpsertRequest request, int? proveedorId = null)
+        {
+            CrmProveedor entity;
+            if (proveedorId.HasValue)
+            {
+                entity = await _context.CrmProveedores.FirstOrDefaultAsync(p =>
+                    p.ProveedorId == proveedorId.Value && p.EmpresaId == request.EmpresaId && p.Activo)
+                    ?? throw new InvalidOperationException("Proveedor no encontrado");
+            }
+            else
+            {
+                entity = new CrmProveedor { EmpresaId = request.EmpresaId, FechaCreacion = DateTime.UtcNow };
+                _context.CrmProveedores.Add(entity);
+            }
+
+            entity.Nombre = request.Nombre.Trim();
+            entity.Categoria = string.IsNullOrWhiteSpace(request.Categoria) ? "General" : request.Categoria.Trim();
+            entity.ContactoNombre = request.ContactoNombre;
+            entity.Email = request.Email;
+            entity.Telefono = request.Telefono;
+            entity.Ruc = request.Ruc;
+            entity.ProductoCodigo = string.IsNullOrWhiteSpace(request.ProductoCodigo) ? null : request.ProductoCodigo.Trim().ToUpperInvariant();
+            entity.Estado = Normalizar(request.Estado, EstadosProveedor, "Activo");
+            entity.Notas = request.Notas;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return MapProveedor(entity);
+        }
+
+        public async Task<bool> EliminarProveedorAsync(int proveedorId, int empresaId)
+        {
+            var e = await _context.CrmProveedores.FirstOrDefaultAsync(p => p.ProveedorId == proveedorId && p.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            e.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<List<CrmProyectoDto>> ListarProyectosAsync(int empresaId, string? estado = null, string? productoCodigo = null)
+        {
+            var q = _context.CrmProyectos.AsNoTracking()
+                .Include(p => p.Cliente)
+                .Where(p => p.EmpresaId == empresaId && p.Activo);
+            if (!string.IsNullOrWhiteSpace(estado))
+                q = q.Where(p => p.Estado == estado);
+            if (!string.IsNullOrWhiteSpace(productoCodigo))
+                q = q.Where(p => p.ProductoCodigo == productoCodigo);
+            var list = await q.OrderByDescending(p => p.FechaActualizacion).ToListAsync();
+            return list.Select(MapProyecto).ToList();
+        }
+
+        public async Task<CrmProyectoDto> UpsertProyectoAsync(CrmProyectoUpsertRequest request, int? proyectoId = null)
+        {
+            CrmProyecto entity;
+            if (proyectoId.HasValue)
+            {
+                entity = await _context.CrmProyectos.FirstOrDefaultAsync(p =>
+                    p.ProyectoId == proyectoId.Value && p.EmpresaId == request.EmpresaId && p.Activo)
+                    ?? throw new InvalidOperationException("Proyecto no encontrado");
+            }
+            else
+            {
+                entity = new CrmProyecto { EmpresaId = request.EmpresaId, FechaCreacion = DateTime.UtcNow };
+                _context.CrmProyectos.Add(entity);
+            }
+
+            entity.Titulo = request.Titulo.Trim();
+            entity.Descripcion = request.Descripcion;
+            entity.ProductoCodigo = string.IsNullOrWhiteSpace(request.ProductoCodigo) ? null : request.ProductoCodigo.Trim().ToUpperInvariant();
+            entity.Estado = Normalizar(request.Estado, EstadosProyecto, "Planificado");
+            entity.Prioridad = Normalizar(request.Prioridad, PrioridadesP, "P1");
+            entity.ClienteId = request.ClienteId;
+            entity.FechaInicio = request.FechaInicio?.Date;
+            entity.FechaFin = request.FechaFin?.Date;
+            entity.ResponsableNombre = request.ResponsableNombre;
+            entity.AvancePct = Math.Clamp(request.AvancePct, 0, 100);
+            entity.Notas = request.Notas;
+            entity.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            if (entity.ClienteId.HasValue)
+            {
+                entity = await _context.CrmProyectos.AsNoTracking()
+                    .Include(p => p.Cliente)
+                    .FirstAsync(p => p.ProyectoId == entity.ProyectoId);
+            }
+            return MapProyecto(entity);
+        }
+
+        public async Task<bool> EliminarProyectoAsync(int proyectoId, int empresaId)
+        {
+            var e = await _context.CrmProyectos.FirstOrDefaultAsync(p => p.ProyectoId == proyectoId && p.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            e.FechaActualizacion = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        private static CrmProductoDto MapProducto(CrmProducto p) => new()
+        {
+            ProductoId = p.ProductoId,
+            EmpresaId = p.EmpresaId,
+            Codigo = p.Codigo,
+            Nombre = p.Nombre,
+            Significado = p.Significado,
+            QueSera = p.QueSera,
+            QueIncluye = p.QueIncluye,
+            IdeaCentral = p.IdeaCentral,
+            Estado = p.Estado,
+            Prioridad = p.Prioridad,
+            FeeEstimadoGs = p.FeeEstimadoGs,
+            Orden = p.Orden,
+            Notas = p.Notas,
+        };
+
+        private static CrmProveedorDto MapProveedor(CrmProveedor p) => new()
+        {
+            ProveedorId = p.ProveedorId,
+            EmpresaId = p.EmpresaId,
+            Nombre = p.Nombre,
+            Categoria = p.Categoria,
+            ContactoNombre = p.ContactoNombre,
+            Email = p.Email,
+            Telefono = p.Telefono,
+            Ruc = p.Ruc,
+            ProductoCodigo = p.ProductoCodigo,
+            Estado = p.Estado,
+            Notas = p.Notas,
+        };
+
+        private static CrmProyectoDto MapProyecto(CrmProyecto p) => new()
+        {
+            ProyectoId = p.ProyectoId,
+            EmpresaId = p.EmpresaId,
+            Titulo = p.Titulo,
+            Descripcion = p.Descripcion,
+            ProductoCodigo = p.ProductoCodigo,
+            Estado = p.Estado,
+            Prioridad = p.Prioridad,
+            ClienteId = p.ClienteId,
+            ClienteNombre = p.Cliente?.RazonSocial,
+            FechaInicio = p.FechaInicio,
+            FechaFin = p.FechaFin,
+            ResponsableNombre = p.ResponsableNombre,
+            AvancePct = p.AvancePct,
+            Notas = p.Notas,
+        };
     }
 }

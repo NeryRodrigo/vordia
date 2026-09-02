@@ -72,6 +72,20 @@ namespace Gesco.Application.Interfaces
         DbSet<FontanaMovimiento> FontanaMovimientos { get; set; }
         DbSet<FontanaPersonal> FontanaPersonal { get; set; }
 
+        // VORDIA STAY
+        DbSet<StayTarifa> StayTarifas { get; set; }
+        DbSet<StayPago> StayPagos { get; set; }
+        DbSet<StayBloqueo> StayBloqueos { get; set; }
+        DbSet<StayHuesped> StayHuespedes { get; set; }
+
+        // VORDIA HQ — capital / empleados / objetivos
+        DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
+        DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
+        DbSet<CrmObjetivo> CrmObjetivos { get; set; }
+        DbSet<CrmProducto> CrmProductos { get; set; }
+        DbSet<CrmProveedor> CrmProveedores { get; set; }
+        DbSet<CrmProyecto> CrmProyectos { get; set; }
+
         Task BulkInsertAsync(List<Propiedad> batch);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

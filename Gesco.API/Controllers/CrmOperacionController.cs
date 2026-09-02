@@ -153,5 +153,196 @@ namespace Gesco.API.Controllers
             if (!ok) return NotFound();
             return NoContent();
         }
+
+        // --- Capital ---
+        [HttpGet("capital")]
+        public async Task<IActionResult> Capital([FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ObtenerCapitalAsync(empresaId));
+        }
+
+        [HttpPost("capital")]
+        public async Task<IActionResult> RegistrarCapital([FromBody] CrmCapitalUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || request.MontoGs == 0)
+                return BadRequest(new { mensaje = "EmpresaId y MontoGs requeridos" });
+            return Ok(await _ops.RegistrarCapitalAsync(request));
+        }
+
+        [HttpDelete("capital/{capitalId:int}")]
+        public async Task<IActionResult> EliminarCapital(int capitalId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarCapitalAsync(capitalId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Empleados HQ ---
+        [HttpGet("empleados-hq")]
+        public async Task<IActionResult> Empleados([FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarEmpleadosHqAsync(empresaId));
+        }
+
+        [HttpPost("empleados-hq")]
+        public async Task<IActionResult> CrearEmpleado([FromBody] CrmEmpleadoHqUpsertRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Nombre))
+                return BadRequest(new { mensaje = "Nombre obligatorio" });
+            return Ok(await _ops.UpsertEmpleadoHqAsync(request));
+        }
+
+        [HttpPut("empleados-hq/{empleadoId:int}")]
+        public async Task<IActionResult> ActualizarEmpleado(int empleadoId, [FromBody] CrmEmpleadoHqUpsertRequest request)
+        {
+            try
+            {
+                return Ok(await _ops.UpsertEmpleadoHqAsync(request, empleadoId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpDelete("empleados-hq/{empleadoId:int}")]
+        public async Task<IActionResult> EliminarEmpleado(int empleadoId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarEmpleadoHqAsync(empleadoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Objetivos ---
+        [HttpGet("objetivos")]
+        public async Task<IActionResult> Objetivos([FromQuery] int empresaId, [FromQuery] string? ambito = null, [FromQuery] int? tareaId = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarObjetivosAsync(empresaId, ambito, tareaId));
+        }
+
+        [HttpPost("objetivos")]
+        public async Task<IActionResult> CrearObjetivo([FromBody] CrmObjetivoUpsertRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Titulo))
+                return BadRequest(new { mensaje = "Titulo obligatorio" });
+            return Ok(await _ops.UpsertObjetivoAsync(request));
+        }
+
+        [HttpPut("objetivos/{objetivoId:int}")]
+        public async Task<IActionResult> ActualizarObjetivo(int objetivoId, [FromBody] CrmObjetivoUpsertRequest request)
+        {
+            try
+            {
+                return Ok(await _ops.UpsertObjetivoAsync(request, objetivoId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpDelete("objetivos/{objetivoId:int}")]
+        public async Task<IActionResult> EliminarObjetivo(int objetivoId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarObjetivoAsync(objetivoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Productos ---
+        [HttpGet("productos")]
+        public async Task<IActionResult> Productos([FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarProductosAsync(empresaId));
+        }
+
+        [HttpPost("productos")]
+        public async Task<IActionResult> CrearProducto([FromBody] CrmProductoUpsertRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Codigo) || string.IsNullOrWhiteSpace(request.Nombre))
+                return BadRequest(new { mensaje = "Codigo y Nombre obligatorios" });
+            return Ok(await _ops.UpsertProductoAsync(request));
+        }
+
+        [HttpPut("productos/{productoId:int}")]
+        public async Task<IActionResult> ActualizarProducto(int productoId, [FromBody] CrmProductoUpsertRequest request)
+        {
+            try { return Ok(await _ops.UpsertProductoAsync(request, productoId)); }
+            catch (InvalidOperationException ex) { return NotFound(new { mensaje = ex.Message }); }
+        }
+
+        [HttpDelete("productos/{productoId:int}")]
+        public async Task<IActionResult> EliminarProducto(int productoId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarProductoAsync(productoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Proveedores ---
+        [HttpGet("proveedores")]
+        public async Task<IActionResult> Proveedores([FromQuery] int empresaId, [FromQuery] string? estado = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarProveedoresAsync(empresaId, estado));
+        }
+
+        [HttpPost("proveedores")]
+        public async Task<IActionResult> CrearProveedor([FromBody] CrmProveedorUpsertRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Nombre))
+                return BadRequest(new { mensaje = "Nombre obligatorio" });
+            return Ok(await _ops.UpsertProveedorAsync(request));
+        }
+
+        [HttpPut("proveedores/{proveedorId:int}")]
+        public async Task<IActionResult> ActualizarProveedor(int proveedorId, [FromBody] CrmProveedorUpsertRequest request)
+        {
+            try { return Ok(await _ops.UpsertProveedorAsync(request, proveedorId)); }
+            catch (InvalidOperationException ex) { return NotFound(new { mensaje = ex.Message }); }
+        }
+
+        [HttpDelete("proveedores/{proveedorId:int}")]
+        public async Task<IActionResult> EliminarProveedor(int proveedorId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarProveedorAsync(proveedorId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Proyectos ---
+        [HttpGet("proyectos")]
+        public async Task<IActionResult> Proyectos([FromQuery] int empresaId, [FromQuery] string? estado = null, [FromQuery] string? productoCodigo = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarProyectosAsync(empresaId, estado, productoCodigo));
+        }
+
+        [HttpPost("proyectos")]
+        public async Task<IActionResult> CrearProyecto([FromBody] CrmProyectoUpsertRequest request)
+        {
+            if (string.IsNullOrWhiteSpace(request.Titulo))
+                return BadRequest(new { mensaje = "Titulo obligatorio" });
+            return Ok(await _ops.UpsertProyectoAsync(request));
+        }
+
+        [HttpPut("proyectos/{proyectoId:int}")]
+        public async Task<IActionResult> ActualizarProyecto(int proyectoId, [FromBody] CrmProyectoUpsertRequest request)
+        {
+            try { return Ok(await _ops.UpsertProyectoAsync(request, proyectoId)); }
+            catch (InvalidOperationException ex) { return NotFound(new { mensaje = ex.Message }); }
+        }
+
+        [HttpDelete("proyectos/{proyectoId:int}")]
+        public async Task<IActionResult> EliminarProyecto(int proyectoId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarProyectoAsync(proyectoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
     }
 }

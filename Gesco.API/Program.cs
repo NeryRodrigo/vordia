@@ -169,6 +169,7 @@ builder.Services.AddScoped<IModuloService, ModuloService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IHabitacionService, HabitacionService>();
 builder.Services.AddScoped<IReservaService, ReservaService>();
+builder.Services.AddScoped<IStayService, StayService>();
 builder.Services.AddScoped<IUnidadCondominioService, UnidadCondominioService>();
 builder.Services.AddScoped<IContratoInquilinoService, ContratoInquilinoService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
