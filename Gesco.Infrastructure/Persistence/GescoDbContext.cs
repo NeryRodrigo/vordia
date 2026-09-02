@@ -73,6 +73,19 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<FontanaMovimiento> FontanaMovimientos { get; set; }
         public DbSet<FontanaPersonal> FontanaPersonal { get; set; }
 
+        // VORDIA STAY
+        public DbSet<StayTarifa> StayTarifas { get; set; }
+        public DbSet<StayPago> StayPagos { get; set; }
+        public DbSet<StayBloqueo> StayBloqueos { get; set; }
+        public DbSet<StayHuesped> StayHuespedes { get; set; }
+
+        public DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
+        public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
+        public DbSet<CrmObjetivo> CrmObjetivos { get; set; }
+        public DbSet<CrmProducto> CrmProductos { get; set; }
+        public DbSet<CrmProveedor> CrmProveedores { get; set; }
+        public DbSet<CrmProyecto> CrmProyectos { get; set; }
+
         public async Task BulkInsertAsync(List<Propiedad> batch)
         {
             /*if (batch == null || batch.Count == 0)
@@ -114,6 +127,25 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<FontanaPersonal>().ToTable("FontanaPersonal");
             modelBuilder.Entity<FontanaMovimiento>().Property(m => m.Monto).HasPrecision(18, 2);
             modelBuilder.Entity<FontanaPersonal>().Property(p => p.Salario).HasPrecision(18, 2);
+
+            modelBuilder.Entity<StayTarifa>().ToTable("StayTarifas");
+            modelBuilder.Entity<StayPago>().ToTable("StayPagos");
+            modelBuilder.Entity<StayBloqueo>().ToTable("StayBloqueos");
+            modelBuilder.Entity<StayHuesped>().ToTable("StayHuespedes");
+            modelBuilder.Entity<StayTarifa>().Property(t => t.PrecioPorNocheGs).HasPrecision(18, 2);
+            modelBuilder.Entity<StayTarifa>().Property(t => t.PrecioPorSemanaGs).HasPrecision(18, 2);
+            modelBuilder.Entity<StayTarifa>().Property(t => t.PrecioPorMesGs).HasPrecision(18, 2);
+            modelBuilder.Entity<StayPago>().Property(p => p.MontoGs).HasPrecision(18, 2);
+
+            modelBuilder.Entity<CrmCapitalMovimiento>().ToTable("CrmCapitalMovimientos");
+            modelBuilder.Entity<CrmEmpleadoHq>().ToTable("CrmEmpleadosHq");
+            modelBuilder.Entity<CrmObjetivo>().ToTable("CrmObjetivos");
+            modelBuilder.Entity<CrmProducto>().ToTable("CrmProductos");
+            modelBuilder.Entity<CrmProveedor>().ToTable("CrmProveedores");
+            modelBuilder.Entity<CrmProyecto>().ToTable("CrmProyectos");
+            modelBuilder.Entity<CrmCapitalMovimiento>().Property(c => c.MontoGs).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmEmpleadoHq>().Property(e => e.SalarioMensualGs).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmProducto>().Property(p => p.FeeEstimadoGs).HasPrecision(18, 2);
 
             modelBuilder.Entity<CrmCliente>()
                 .HasMany(c => c.Historial)

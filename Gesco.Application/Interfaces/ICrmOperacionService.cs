@@ -25,5 +25,30 @@ namespace Gesco.Application.Interfaces
         Task<CrmRoadmapDto?> CambiarEstadoRoadmapAsync(int roadmapId, int empresaId, string estado, int? usuarioId = null, string? usuarioNombre = null);
         Task<CrmRoadmapDto?> AgregarNotaRoadmapAsync(int roadmapId, CrmRoadmapNotaRequest request);
         Task<bool> EliminarRoadmapAsync(int roadmapId, int empresaId);
+
+        // Capital / Empleados / Objetivos (HQ)
+        Task<CrmCapitalResumenDto> ObtenerCapitalAsync(int empresaId);
+        Task<CrmCapitalDto> RegistrarCapitalAsync(CrmCapitalUpsertRequest request);
+        Task<bool> EliminarCapitalAsync(int capitalId, int empresaId);
+
+        Task<CrmEmpleadosResumenDto> ListarEmpleadosHqAsync(int empresaId);
+        Task<CrmEmpleadoHqDto> UpsertEmpleadoHqAsync(CrmEmpleadoHqUpsertRequest request, int? empleadoId = null);
+        Task<bool> EliminarEmpleadoHqAsync(int empleadoId, int empresaId);
+
+        Task<List<CrmObjetivoDto>> ListarObjetivosAsync(int empresaId, string? ambito = null, int? tareaId = null);
+        Task<CrmObjetivoDto> UpsertObjetivoAsync(CrmObjetivoUpsertRequest request, int? objetivoId = null);
+        Task<bool> EliminarObjetivoAsync(int objetivoId, int empresaId);
+
+        Task<List<CrmProductoDto>> ListarProductosAsync(int empresaId);
+        Task<CrmProductoDto> UpsertProductoAsync(CrmProductoUpsertRequest request, int? productoId = null);
+        Task<bool> EliminarProductoAsync(int productoId, int empresaId);
+
+        Task<List<CrmProveedorDto>> ListarProveedoresAsync(int empresaId, string? estado = null);
+        Task<CrmProveedorDto> UpsertProveedorAsync(CrmProveedorUpsertRequest request, int? proveedorId = null);
+        Task<bool> EliminarProveedorAsync(int proveedorId, int empresaId);
+
+        Task<List<CrmProyectoDto>> ListarProyectosAsync(int empresaId, string? estado = null, string? productoCodigo = null);
+        Task<CrmProyectoDto> UpsertProyectoAsync(CrmProyectoUpsertRequest request, int? proyectoId = null);
+        Task<bool> EliminarProyectoAsync(int proyectoId, int empresaId);
     }
 }
