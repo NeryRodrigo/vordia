@@ -78,6 +78,16 @@ namespace Gesco.Application.Interfaces
         DbSet<StayBloqueo> StayBloqueos { get; set; }
         DbSet<StayHuesped> StayHuespedes { get; set; }
 
+        // VORDIA AGRO
+        DbSet<AgroEstablecimiento> AgroEstablecimientos { get; set; }
+        DbSet<AgroLote> AgroLotes { get; set; }
+        DbSet<AgroZona> AgroZonas { get; set; }
+        DbSet<AgroAnimal> AgroAnimales { get; set; }
+        DbSet<AgroPesaje> AgroPesajes { get; set; }
+        DbSet<AgroRacion> AgroRaciones { get; set; }
+        DbSet<AgroDispositivo> AgroDispositivos { get; set; }
+        DbSet<AgroAlerta> AgroAlertas { get; set; }
+
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }

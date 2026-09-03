@@ -79,6 +79,16 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<StayBloqueo> StayBloqueos { get; set; }
         public DbSet<StayHuesped> StayHuespedes { get; set; }
 
+        // VORDIA AGRO
+        public DbSet<AgroEstablecimiento> AgroEstablecimientos { get; set; }
+        public DbSet<AgroLote> AgroLotes { get; set; }
+        public DbSet<AgroZona> AgroZonas { get; set; }
+        public DbSet<AgroAnimal> AgroAnimales { get; set; }
+        public DbSet<AgroPesaje> AgroPesajes { get; set; }
+        public DbSet<AgroRacion> AgroRaciones { get; set; }
+        public DbSet<AgroDispositivo> AgroDispositivos { get; set; }
+        public DbSet<AgroAlerta> AgroAlertas { get; set; }
+
         public DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
         public DbSet<CrmObjetivo> CrmObjetivos { get; set; }
@@ -136,6 +146,25 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<StayTarifa>().Property(t => t.PrecioPorSemanaGs).HasPrecision(18, 2);
             modelBuilder.Entity<StayTarifa>().Property(t => t.PrecioPorMesGs).HasPrecision(18, 2);
             modelBuilder.Entity<StayPago>().Property(p => p.MontoGs).HasPrecision(18, 2);
+
+            modelBuilder.Entity<AgroEstablecimiento>().ToTable("AgroEstablecimientos");
+            modelBuilder.Entity<AgroLote>().ToTable("AgroLotes");
+            modelBuilder.Entity<AgroZona>().ToTable("AgroZonas");
+            modelBuilder.Entity<AgroAnimal>().ToTable("AgroAnimales");
+            modelBuilder.Entity<AgroPesaje>().ToTable("AgroPesajes");
+            modelBuilder.Entity<AgroRacion>().ToTable("AgroRaciones");
+            modelBuilder.Entity<AgroDispositivo>().ToTable("AgroDispositivos");
+            modelBuilder.Entity<AgroAlerta>().ToTable("AgroAlertas");
+            modelBuilder.Entity<AgroEstablecimiento>().Property(e => e.Hectareas).HasPrecision(18, 2);
+            modelBuilder.Entity<AgroZona>().Property(z => z.LatCentro).HasPrecision(10, 6);
+            modelBuilder.Entity<AgroZona>().Property(z => z.LngCentro).HasPrecision(10, 6);
+            modelBuilder.Entity<AgroAnimal>().Property(a => a.PesoIngresoKg).HasPrecision(10, 2);
+            modelBuilder.Entity<AgroAnimal>().Property(a => a.PesoActualKg).HasPrecision(10, 2);
+            modelBuilder.Entity<AgroAnimal>().Property(a => a.UltimaLat).HasPrecision(10, 6);
+            modelBuilder.Entity<AgroAnimal>().Property(a => a.UltimaLng).HasPrecision(10, 6);
+            modelBuilder.Entity<AgroPesaje>().Property(p => p.PesoKg).HasPrecision(10, 2);
+            modelBuilder.Entity<AgroRacion>().Property(r => r.CantidadKg).HasPrecision(12, 2);
+            modelBuilder.Entity<AgroRacion>().Property(r => r.CostoGs).HasPrecision(18, 2);
 
             modelBuilder.Entity<CrmCapitalMovimiento>().ToTable("CrmCapitalMovimientos");
             modelBuilder.Entity<CrmEmpleadoHq>().ToTable("CrmEmpleadosHq");
