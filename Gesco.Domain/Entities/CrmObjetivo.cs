@@ -22,6 +22,12 @@ namespace Gesco.Domain.Entities
         [Required, StringLength(20)]
         public string Prioridad { get; set; } = "Media";
         public DateTime? FechaObjetivo { get; set; }
+        /// <summary>Objetivo numérico a alcanzar (ej. 10 clientes nuevos). Null si no aplica.</summary>
+        public decimal? MetaValor { get; set; }
+        /// <summary>Valor alcanzado hasta hoy (ej. 7).</summary>
+        public decimal? ValorActual { get; set; }
+        /// <summary>Avance manual 0..100, para objetivos sin meta numérica.</summary>
+        public int? AvancePct { get; set; }
         public int? ClienteId { get; set; }
         public int? TareaId { get; set; }
         [StringLength(150)]

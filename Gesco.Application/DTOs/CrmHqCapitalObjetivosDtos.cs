@@ -81,6 +81,9 @@ namespace Gesco.Application.DTOs
         public string Estado { get; set; } = "Pendiente";
         public string Prioridad { get; set; } = "Media";
         public DateTime? FechaObjetivo { get; set; }
+        public decimal? MetaValor { get; set; }
+        public decimal? ValorActual { get; set; }
+        public int? AvancePct { get; set; }
         public int? ClienteId { get; set; }
         public string? ClienteNombre { get; set; }
         public int? TareaId { get; set; }
@@ -99,6 +102,9 @@ namespace Gesco.Application.DTOs
         public string Estado { get; set; } = "Pendiente";
         public string Prioridad { get; set; } = "Media";
         public DateTime? FechaObjetivo { get; set; }
+        public decimal? MetaValor { get; set; }
+        public decimal? ValorActual { get; set; }
+        public int? AvancePct { get; set; }
         public int? ClienteId { get; set; }
         public int? TareaId { get; set; }
         public string? CreadoPor { get; set; }

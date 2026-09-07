@@ -702,6 +702,9 @@ namespace Gesco.Application.Services
                 Estado = o.Estado,
                 Prioridad = o.Prioridad,
                 FechaObjetivo = o.FechaObjetivo,
+                MetaValor = o.MetaValor,
+                ValorActual = o.ValorActual,
+                AvancePct = o.AvancePct,
                 ClienteId = o.ClienteId,
                 ClienteNombre = o.ClienteId.HasValue && clientes.ContainsKey(o.ClienteId.Value) ? clientes[o.ClienteId.Value] : null,
                 TareaId = o.TareaId,
@@ -733,6 +736,11 @@ namespace Gesco.Application.Services
             entity.Estado = Normalizar(request.Estado, new[] { "Pendiente", "En curso", "Logrado", "Pausado", "Cancelado" }, "Pendiente");
             entity.Prioridad = Normalizar(request.Prioridad, Prioridades, "Media");
             entity.FechaObjetivo = request.FechaObjetivo?.Date;
+            entity.MetaValor = request.MetaValor;
+            entity.ValorActual = request.ValorActual;
+            entity.AvancePct = request.AvancePct.HasValue
+                ? Math.Clamp(request.AvancePct.Value, 0, 100)
+                : null;
             entity.ClienteId = request.ClienteId;
             entity.TareaId = request.TareaId;
             if (!string.IsNullOrWhiteSpace(request.CreadoPor))
