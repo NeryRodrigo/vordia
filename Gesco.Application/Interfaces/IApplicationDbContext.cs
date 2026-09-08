@@ -90,6 +90,8 @@ namespace Gesco.Application.Interfaces
 
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
+        DbSet<CrmGasto> CrmGastos { get; set; }
+        DbSet<CrmPropuesta> CrmPropuestas { get; set; }
         DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
         DbSet<CrmObjetivo> CrmObjetivos { get; set; }
         DbSet<CrmProducto> CrmProductos { get; set; }

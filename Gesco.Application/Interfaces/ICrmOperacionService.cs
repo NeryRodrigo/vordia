@@ -31,6 +31,15 @@ namespace Gesco.Application.Interfaces
         Task<CrmCapitalDto> RegistrarCapitalAsync(CrmCapitalUpsertRequest request);
         Task<bool> EliminarCapitalAsync(int capitalId, int empresaId);
 
+        Task<CrmPropuestasResumenDto> ListarPropuestasAsync(int empresaId, int? clienteId = null, string? estado = null);
+        Task<CrmPropuestaDto> UpsertPropuestaAsync(CrmPropuestaUpsertRequest request, int? propuestaId = null);
+        Task<bool> EliminarPropuestaAsync(int propuestaId, int empresaId);
+
+        Task<CrmGastosResumenDto> ListarGastosAsync(int empresaId, string? estado = null);
+        Task<CrmGastoDto> UpsertGastoAsync(CrmGastoUpsertRequest request, int? gastoId = null);
+        Task<CrmGastoDto?> MarcarGastoPagadoAsync(int gastoId, CrmGastoPagoRequest request);
+        Task<bool> EliminarGastoAsync(int gastoId, int empresaId);
+
         Task<CrmEmpleadosResumenDto> ListarEmpleadosHqAsync(int empresaId);
         Task<CrmEmpleadoHqDto> UpsertEmpleadoHqAsync(CrmEmpleadoHqUpsertRequest request, int? empleadoId = null);
         Task<bool> EliminarEmpleadoHqAsync(int empleadoId, int empresaId);

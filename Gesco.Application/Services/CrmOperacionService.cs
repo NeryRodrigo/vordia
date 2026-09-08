@@ -589,6 +589,315 @@ namespace Gesco.Application.Services
             return true;
         }
 
+        // ---------- Propuestas comerciales ----------
+
+        private static readonly string[] EstadosPropuesta = { "Enviada", "Ganada", "Perdida" };
+
+        private static CrmPropuestaDto ToPropuestaDto(CrmPropuesta p, CrmCliente? cliente) => new()
+        {
+            PropuestaId = p.PropuestaId,
+            EmpresaId = p.EmpresaId,
+            ClienteId = p.ClienteId,
+            ClienteNombre = cliente?.RazonSocial ?? "",
+            Descripcion = p.Descripcion,
+            MontoGs = p.MontoGs,
+            Estado = p.Estado,
+            FechaEnvio = p.FechaEnvio,
+            FechaCierre = p.FechaCierre,
+            Notas = p.Notas,
+            UsuarioNombre = p.UsuarioNombre,
+            EstadoPipelineCliente = cliente?.EstadoPipeline
+        };
+
+        public async Task<CrmPropuestasResumenDto> ListarPropuestasAsync(int empresaId, int? clienteId = null, string? estado = null)
+        {
+            var q = _context.CrmPropuestas.AsNoTracking().Where(p => p.EmpresaId == empresaId && p.Activo);
+            if (clienteId.HasValue) q = q.Where(p => p.ClienteId == clienteId.Value);
+            if (!string.IsNullOrWhiteSpace(estado) && EstadosPropuesta.Contains(estado))
+                q = q.Where(p => p.Estado == estado);
+
+            var list = await q
+                .OrderBy(p => p.Estado == "Enviada" ? 0 : 1)
+                .ThenByDescending(p => p.FechaEnvio)
+                .ThenByDescending(p => p.PropuestaId)
+                .ToListAsync();
+
+            var ids = list.Select(p => p.ClienteId).Distinct().ToList();
+            var clientes = await _context.CrmClientes.AsNoTracking()
+                .Where(c => c.EmpresaId == empresaId && ids.Contains(c.ClienteId))
+                .ToDictionaryAsync(c => c.ClienteId);
+
+            var resumen = new CrmPropuestasResumenDto
+            {
+                Propuestas = list
+                    .Select(p => ToPropuestaDto(p, clientes.TryGetValue(p.ClienteId, out var c) ? c : null))
+                    .ToList()
+            };
+
+            foreach (var p in list)
+            {
+                switch (p.Estado)
+                {
+                    case "Ganada":
+                        resumen.MontoGanado += p.MontoGs;
+                        resumen.CantidadGanadas++;
+                        break;
+                    case "Perdida":
+                        resumen.MontoPerdido += p.MontoGs;
+                        resumen.CantidadPerdidas++;
+                        break;
+                    default:
+                        resumen.MontoEnviado += p.MontoGs;
+                        resumen.CantidadEnviadas++;
+                        break;
+                }
+            }
+
+            var cerradas = resumen.CantidadGanadas + resumen.CantidadPerdidas;
+            resumen.TasaCierrePct = cerradas > 0
+                ? (int)Math.Round(resumen.CantidadGanadas * 100m / cerradas)
+                : 0;
+
+            return resumen;
+        }
+
+        public async Task<CrmPropuestaDto> UpsertPropuestaAsync(CrmPropuestaUpsertRequest request, int? propuestaId = null)
+        {
+            var cliente = await _context.CrmClientes
+                .FirstOrDefaultAsync(c => c.ClienteId == request.ClienteId && c.EmpresaId == request.EmpresaId)
+                ?? throw new InvalidOperationException("Cliente no encontrado");
+
+            var estado = Normalizar(request.Estado, EstadosPropuesta, "Enviada");
+
+            CrmPropuesta entity;
+            if (propuestaId.HasValue)
+            {
+                entity = await _context.CrmPropuestas
+                    .FirstOrDefaultAsync(p => p.PropuestaId == propuestaId.Value && p.EmpresaId == request.EmpresaId)
+                    ?? throw new InvalidOperationException("Propuesta no encontrada");
+            }
+            else
+            {
+                entity = new CrmPropuesta
+                {
+                    EmpresaId = request.EmpresaId,
+                    Activo = true,
+                    FechaCreacion = DateTime.UtcNow
+                };
+                _context.CrmPropuestas.Add(entity);
+            }
+
+            entity.ClienteId = request.ClienteId;
+            entity.Descripcion = (request.Descripcion ?? "").Trim();
+            entity.MontoGs = Math.Abs(request.MontoGs);
+            entity.Estado = estado;
+            entity.FechaEnvio = (request.FechaEnvio ?? DateTime.Today).Date;
+            // Una propuesta cerrada necesita fecha de cierre; si no vino, se asume hoy.
+            entity.FechaCierre = estado == "Enviada"
+                ? null
+                : (request.FechaCierre ?? DateTime.Today).Date;
+            entity.Notas = request.Notas;
+            entity.UsuarioNombre = request.UsuarioNombre;
+
+            // El estado de la propuesta arrastra al cliente en el pipeline.
+            var estadoAnterior = cliente.EstadoPipeline;
+            if (estado == "Ganada")
+                cliente.EstadoPipeline = "Cliente activo";
+            else if (estado == "Perdida")
+                cliente.EstadoPipeline = "Cerrado";
+            else if (cliente.EstadoPipeline is "Prospecto" or "Contactado" or "En negociacion")
+                cliente.EstadoPipeline = "Propuesta enviada";
+
+            if (cliente.EstadoPipeline != estadoAnterior)
+            {
+                cliente.FechaActualizacion = DateTime.UtcNow;
+                _context.CrmHistorial.Add(new CrmHistorial
+                {
+                    EmpresaId = request.EmpresaId,
+                    ClienteId = cliente.ClienteId,
+                    Tipo = "cambio_estado",
+                    Titulo = $"Propuesta {estado.ToLowerInvariant()}",
+                    Detalle = $"{entity.Descripcion} — {entity.MontoGs:N0} Gs.",
+                    EstadoAnterior = estadoAnterior,
+                    EstadoNuevo = cliente.EstadoPipeline,
+                    UsuarioNombre = request.UsuarioNombre,
+                    Fecha = DateTime.UtcNow
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            return ToPropuestaDto(entity, cliente);
+        }
+
+        public async Task<bool> EliminarPropuestaAsync(int propuestaId, int empresaId)
+        {
+            var e = await _context.CrmPropuestas
+                .FirstOrDefaultAsync(p => p.PropuestaId == propuestaId && p.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // ---------- Gastos / Cuentas por pagar ----------
+
+        private static readonly string[] CategoriasGasto =
+            { "Operativo", "Servicios", "Infraestructura", "Impuestos", "Marketing", "Honorarios", "Otros" };
+        private static readonly string[] EstadosGasto = { "Pendiente", "Pagado", "Anulado" };
+
+        private static CrmGastoDto ToGastoDto(CrmGasto g, DateTime hoy)
+        {
+            var pendiente = g.Estado == "Pendiente";
+            int? dias = g.FechaVencimiento.HasValue
+                ? (int)(g.FechaVencimiento.Value.Date - hoy).TotalDays
+                : null;
+            return new CrmGastoDto
+            {
+                GastoId = g.GastoId,
+                EmpresaId = g.EmpresaId,
+                Concepto = g.Concepto,
+                Categoria = g.Categoria,
+                MontoGs = g.MontoGs,
+                FechaEmision = g.FechaEmision,
+                FechaVencimiento = g.FechaVencimiento,
+                FechaPago = g.FechaPago,
+                Estado = g.Estado,
+                ProveedorId = g.ProveedorId,
+                ProveedorNombre = g.ProveedorNombre,
+                MetodoPago = g.MetodoPago,
+                NroComprobante = g.NroComprobante,
+                Notas = g.Notas,
+                UsuarioNombre = g.UsuarioNombre,
+                Vencido = pendiente && dias.HasValue && dias.Value < 0,
+                DiasParaVencer = dias
+            };
+        }
+
+        public async Task<CrmGastosResumenDto> ListarGastosAsync(int empresaId, string? estado = null)
+        {
+            var q = _context.CrmGastos.AsNoTracking().Where(g => g.EmpresaId == empresaId && g.Activo);
+            if (!string.IsNullOrWhiteSpace(estado) && EstadosGasto.Contains(estado))
+                q = q.Where(g => g.Estado == estado);
+
+            var list = await q
+                .OrderBy(g => g.Estado == "Pendiente" ? 0 : 1)
+                .ThenBy(g => g.FechaVencimiento ?? g.FechaEmision)
+                .ThenByDescending(g => g.GastoId)
+                .ToListAsync();
+
+            var hoy = DateTime.Today;
+            var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+            var finMes = inicioMes.AddMonths(1);
+            var limite7 = hoy.AddDays(7);
+
+            var resumen = new CrmGastosResumenDto
+            {
+                Gastos = list.Select(g => ToGastoDto(g, hoy)).ToList()
+            };
+
+            foreach (var g in list)
+            {
+                if (g.Estado == "Pagado")
+                {
+                    resumen.PagadoTotal += g.MontoGs;
+                    if (g.FechaPago.HasValue && g.FechaPago.Value >= inicioMes && g.FechaPago.Value < finMes)
+                        resumen.PagadoMesActual += g.MontoGs;
+                }
+                else if (g.Estado == "Pendiente")
+                {
+                    resumen.PendienteTotal += g.MontoGs;
+                    resumen.CantidadPendientes++;
+
+                    if (g.FechaVencimiento.HasValue)
+                    {
+                        var venc = g.FechaVencimiento.Value.Date;
+                        if (venc < hoy)
+                        {
+                            resumen.VencidoTotal += g.MontoGs;
+                            resumen.CantidadVencidos++;
+                        }
+                        else if (venc <= limite7)
+                        {
+                            resumen.VenceProximos7Dias += g.MontoGs;
+                            resumen.CantidadVenceProximos7Dias++;
+                        }
+                    }
+                }
+            }
+
+            return resumen;
+        }
+
+        public async Task<CrmGastoDto> UpsertGastoAsync(CrmGastoUpsertRequest request, int? gastoId = null)
+        {
+            var estado = Normalizar(request.Estado, EstadosGasto, "Pendiente");
+            var categoria = Normalizar(request.Categoria, CategoriasGasto, "Operativo");
+
+            CrmGasto entity;
+            if (gastoId.HasValue)
+            {
+                entity = await _context.CrmGastos
+                    .FirstOrDefaultAsync(g => g.GastoId == gastoId.Value && g.EmpresaId == request.EmpresaId)
+                    ?? throw new InvalidOperationException("Gasto no encontrado");
+            }
+            else
+            {
+                entity = new CrmGasto
+                {
+                    EmpresaId = request.EmpresaId,
+                    Activo = true,
+                    FechaCreacion = DateTime.UtcNow
+                };
+                _context.CrmGastos.Add(entity);
+            }
+
+            entity.Concepto = (request.Concepto ?? "").Trim();
+            entity.Categoria = categoria;
+            entity.MontoGs = Math.Abs(request.MontoGs);
+            entity.FechaEmision = (request.FechaEmision ?? DateTime.Today).Date;
+            entity.FechaVencimiento = request.FechaVencimiento?.Date;
+            entity.Estado = estado;
+            // Un gasto pagado necesita fecha de pago; si no vino, se asume hoy.
+            entity.FechaPago = estado == "Pagado"
+                ? (request.FechaPago ?? DateTime.Today).Date
+                : null;
+            entity.ProveedorId = request.ProveedorId;
+            entity.ProveedorNombre = string.IsNullOrWhiteSpace(request.ProveedorNombre) ? null : request.ProveedorNombre.Trim();
+            entity.MetodoPago = string.IsNullOrWhiteSpace(request.MetodoPago) ? null : request.MetodoPago.Trim();
+            entity.NroComprobante = string.IsNullOrWhiteSpace(request.NroComprobante) ? null : request.NroComprobante.Trim();
+            entity.Notas = request.Notas;
+            entity.UsuarioNombre = request.UsuarioNombre;
+
+            await _context.SaveChangesAsync();
+            return ToGastoDto(entity, DateTime.Today);
+        }
+
+        public async Task<CrmGastoDto?> MarcarGastoPagadoAsync(int gastoId, CrmGastoPagoRequest request)
+        {
+            var e = await _context.CrmGastos
+                .FirstOrDefaultAsync(g => g.GastoId == gastoId && g.EmpresaId == request.EmpresaId && g.Activo);
+            if (e == null) return null;
+
+            e.Estado = "Pagado";
+            e.FechaPago = (request.FechaPago ?? DateTime.Today).Date;
+            if (!string.IsNullOrWhiteSpace(request.MetodoPago))
+                e.MetodoPago = request.MetodoPago.Trim();
+            if (!string.IsNullOrWhiteSpace(request.UsuarioNombre))
+                e.UsuarioNombre = request.UsuarioNombre;
+
+            await _context.SaveChangesAsync();
+            return ToGastoDto(e, DateTime.Today);
+        }
+
+        public async Task<bool> EliminarGastoAsync(int gastoId, int empresaId)
+        {
+            var e = await _context.CrmGastos.FirstOrDefaultAsync(g => g.GastoId == gastoId && g.EmpresaId == empresaId);
+            if (e == null) return false;
+            e.Activo = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<CrmEmpleadosResumenDto> ListarEmpleadosHqAsync(int empresaId)
         {
             var list = await _context.CrmEmpleadosHq.AsNoTracking()
