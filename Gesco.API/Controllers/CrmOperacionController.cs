@@ -178,6 +178,103 @@ namespace Gesco.API.Controllers
             return NoContent();
         }
 
+        // --- Propuestas comerciales ---
+        [HttpGet("propuestas")]
+        public async Task<IActionResult> Propuestas(
+            [FromQuery] int empresaId,
+            [FromQuery] int? clienteId = null,
+            [FromQuery] string? estado = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarPropuestasAsync(empresaId, clienteId, estado));
+        }
+
+        [HttpPost("propuestas")]
+        public async Task<IActionResult> CrearPropuesta([FromBody] CrmPropuestaUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || request.ClienteId <= 0 || string.IsNullOrWhiteSpace(request.Descripcion))
+                return BadRequest(new { mensaje = "EmpresaId, ClienteId y Descripcion requeridos" });
+            try
+            {
+                return Ok(await _ops.UpsertPropuestaAsync(request));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpPut("propuestas/{propuestaId:int}")]
+        public async Task<IActionResult> ActualizarPropuesta(int propuestaId, [FromBody] CrmPropuestaUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || request.ClienteId <= 0)
+                return BadRequest(new { mensaje = "EmpresaId y ClienteId requeridos" });
+            try
+            {
+                return Ok(await _ops.UpsertPropuestaAsync(request, propuestaId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpDelete("propuestas/{propuestaId:int}")]
+        public async Task<IActionResult> EliminarPropuesta(int propuestaId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarPropuestaAsync(propuestaId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
+        // --- Gastos / Cuentas por pagar ---
+        [HttpGet("gastos")]
+        public async Task<IActionResult> Gastos([FromQuery] int empresaId, [FromQuery] string? estado = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarGastosAsync(empresaId, estado));
+        }
+
+        [HttpPost("gastos")]
+        public async Task<IActionResult> CrearGasto([FromBody] CrmGastoUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || string.IsNullOrWhiteSpace(request.Concepto) || request.MontoGs == 0)
+                return BadRequest(new { mensaje = "EmpresaId, Concepto y MontoGs requeridos" });
+            return Ok(await _ops.UpsertGastoAsync(request));
+        }
+
+        [HttpPut("gastos/{gastoId:int}")]
+        public async Task<IActionResult> ActualizarGasto(int gastoId, [FromBody] CrmGastoUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || string.IsNullOrWhiteSpace(request.Concepto))
+                return BadRequest(new { mensaje = "EmpresaId y Concepto requeridos" });
+            try
+            {
+                return Ok(await _ops.UpsertGastoAsync(request, gastoId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpPost("gastos/{gastoId:int}/pagar")]
+        public async Task<IActionResult> PagarGasto(int gastoId, [FromBody] CrmGastoPagoRequest request)
+        {
+            if (request.EmpresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _ops.MarcarGastoPagadoAsync(gastoId, request);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
+        [HttpDelete("gastos/{gastoId:int}")]
+        public async Task<IActionResult> EliminarGasto(int gastoId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarGastoAsync(gastoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
         // --- Empleados HQ ---
         [HttpGet("empleados-hq")]
         public async Task<IActionResult> Empleados([FromQuery] int empresaId)
