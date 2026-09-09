@@ -589,16 +589,232 @@ namespace Gesco.Application.Services
             return true;
         }
 
+        // ---------- Vendedores ----------
+
+        private static readonly string[] EstadosVendedor = { "Activo", "Inactivo" };
+
+        public async Task<CrmVendedoresResumenDto> ListarVendedoresAsync(int empresaId, bool soloActivos = false)
+        {
+            var q = _context.CrmVendedores.AsNoTracking().Where(v => v.EmpresaId == empresaId && v.Activo);
+            if (soloActivos) q = q.Where(v => v.Estado == "Activo");
+
+            var vendedores = await q.OrderBy(v => v.Nombre).ToListAsync();
+
+            // Las ventas de cada vendedor son las propuestas que efectivamente cerró.
+            var propuestas = await _context.CrmPropuestas.AsNoTracking()
+                .Where(p => p.EmpresaId == empresaId && p.Activo && p.VendedorId != null)
+                .Select(p => new { p.VendedorId, p.Estado, p.MontoGs, p.FechaCierre })
+                .ToListAsync();
+
+            var sociosIds = vendedores.Where(v => v.SocioId != null).Select(v => v.SocioId!.Value).ToList();
+            var socios = sociosIds.Count == 0
+                ? new Dictionary<int, CrmSocio>()
+                : await _context.CrmSocios.AsNoTracking()
+                    .Where(s => s.EmpresaId == empresaId && sociosIds.Contains(s.SocioId))
+                    .ToDictionaryAsync(s => s.SocioId);
+
+            var hoy = DateTime.Today;
+            var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
+            var finMes = inicioMes.AddMonths(1);
+
+            var resumen = new CrmVendedoresResumenDto();
+
+            foreach (var v in vendedores)
+            {
+                var mias = propuestas.Where(p => p.VendedorId == v.VendedorId).ToList();
+
+                var dto = new CrmVendedorDto
+                {
+                    VendedorId = v.VendedorId,
+                    EmpresaId = v.EmpresaId,
+                    Nombre = v.Nombre,
+                    Email = v.Email,
+                    Telefono = v.Telefono,
+                    ComisionPct = v.ComisionPct,
+                    MetaMensualGs = v.MetaMensualGs,
+                    Estado = v.Estado,
+                    FechaIngreso = v.FechaIngreso,
+                    Notas = v.Notas,
+                    EsSocio = v.SocioId != null,
+                    SocioId = v.SocioId,
+                    FechaSocioDesde = v.FechaSocioDesde,
+                    PorcentajeSocio = v.SocioId != null && socios.TryGetValue(v.SocioId.Value, out var s)
+                        ? s.Porcentaje
+                        : null
+                };
+
+                foreach (var p in mias)
+                {
+                    switch (p.Estado)
+                    {
+                        case "Ganada":
+                            dto.VentasTotalGs += p.MontoGs;
+                            dto.PropuestasGanadas++;
+                            if (p.FechaCierre.HasValue && p.FechaCierre.Value >= inicioMes && p.FechaCierre.Value < finMes)
+                                dto.VentasMesGs += p.MontoGs;
+                            break;
+                        case "Perdida":
+                            dto.PropuestasPerdidas++;
+                            break;
+                        default:
+                            dto.EnNegociacionGs += p.MontoGs;
+                            dto.PropuestasAbiertas++;
+                            break;
+                    }
+                }
+
+                dto.ComisionMesGs = Math.Round(dto.VentasMesGs * (v.ComisionPct / 100m), 0);
+                dto.CumplimientoMetaPct = v.MetaMensualGs > 0
+                    ? (int)Math.Round(dto.VentasMesGs * 100m / v.MetaMensualGs)
+                    : null;
+
+                resumen.Vendedores.Add(dto);
+
+                if (v.Estado == "Activo") resumen.CantidadActivos++;
+                if (dto.EsSocio) resumen.CantidadSocios++;
+                resumen.VentasMesGs += dto.VentasMesGs;
+                resumen.VentasTotalGs += dto.VentasTotalGs;
+                resumen.ComisionesMesGs += dto.ComisionMesGs;
+                resumen.MetaMensualTotalGs += v.MetaMensualGs;
+            }
+
+            return resumen;
+        }
+
+        public async Task<CrmVendedorDto> UpsertVendedorAsync(CrmVendedorUpsertRequest request, int? vendedorId = null)
+        {
+            var estado = Normalizar(request.Estado, EstadosVendedor, "Activo");
+
+            CrmVendedor entity;
+            if (vendedorId.HasValue)
+            {
+                entity = await _context.CrmVendedores
+                    .FirstOrDefaultAsync(v => v.VendedorId == vendedorId.Value && v.EmpresaId == request.EmpresaId)
+                    ?? throw new InvalidOperationException("Vendedor no encontrado");
+            }
+            else
+            {
+                entity = new CrmVendedor
+                {
+                    EmpresaId = request.EmpresaId,
+                    Activo = true,
+                    FechaCreacion = DateTime.UtcNow
+                };
+                _context.CrmVendedores.Add(entity);
+            }
+
+            entity.Nombre = (request.Nombre ?? "").Trim();
+            entity.Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
+            entity.Telefono = string.IsNullOrWhiteSpace(request.Telefono) ? null : request.Telefono.Trim();
+            entity.ComisionPct = Math.Clamp(request.ComisionPct, 0m, 100m);
+            entity.MetaMensualGs = Math.Abs(request.MetaMensualGs);
+            entity.Estado = estado;
+            entity.FechaIngreso = request.FechaIngreso?.Date;
+            entity.Notas = request.Notas;
+
+            await _context.SaveChangesAsync();
+
+            // Si ya es socio, mantener el nombre y el email alineados entre ambas fichas.
+            if (entity.SocioId.HasValue)
+            {
+                var socio = await _context.CrmSocios.FirstOrDefaultAsync(s => s.SocioId == entity.SocioId.Value);
+                if (socio != null)
+                {
+                    socio.Nombre = entity.Nombre;
+                    socio.Email = entity.Email;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            var resumen = await ListarVendedoresAsync(request.EmpresaId);
+            return resumen.Vendedores.First(v => v.VendedorId == entity.VendedorId);
+        }
+
+        /// <summary>Los dueños deciden que este vendedor pase a ser socio.</summary>
+        public async Task<CrmVendedorDto?> PromoverVendedorASocioAsync(int vendedorId, CrmVendedorPromoverRequest request)
+        {
+            var v = await _context.CrmVendedores
+                .FirstOrDefaultAsync(x => x.VendedorId == vendedorId && x.EmpresaId == request.EmpresaId && x.Activo);
+            if (v == null) return null;
+
+            var porcentaje = Math.Clamp(request.Porcentaje, 0m, 100m);
+
+            if (v.SocioId.HasValue)
+            {
+                // Ya era socio: solo se ajusta la participación.
+                var existente = await _context.CrmSocios.FirstOrDefaultAsync(s => s.SocioId == v.SocioId.Value);
+                if (existente != null)
+                {
+                    existente.Porcentaje = porcentaje;
+                    existente.Activo = true;
+                }
+            }
+            else
+            {
+                var socio = new CrmSocio
+                {
+                    EmpresaId = request.EmpresaId,
+                    Nombre = v.Nombre,
+                    Email = v.Email,
+                    Porcentaje = porcentaje,
+                    Activo = true,
+                    FechaCreacion = DateTime.UtcNow
+                };
+                _context.CrmSocios.Add(socio);
+                await _context.SaveChangesAsync();
+
+                v.SocioId = socio.SocioId;
+                v.FechaSocioDesde = DateTime.Today;
+            }
+
+            await _context.SaveChangesAsync();
+
+            var resumen = await ListarVendedoresAsync(request.EmpresaId);
+            return resumen.Vendedores.FirstOrDefault(x => x.VendedorId == vendedorId);
+        }
+
+        /// <summary>Revierte la decisión: deja de ser socio pero sigue vendiendo.</summary>
+        public async Task<CrmVendedorDto?> QuitarSocioAVendedorAsync(int vendedorId, int empresaId)
+        {
+            var v = await _context.CrmVendedores
+                .FirstOrDefaultAsync(x => x.VendedorId == vendedorId && x.EmpresaId == empresaId && x.Activo);
+            if (v == null) return null;
+
+            if (v.SocioId.HasValue)
+            {
+                var socio = await _context.CrmSocios.FirstOrDefaultAsync(s => s.SocioId == v.SocioId.Value);
+                if (socio != null) socio.Activo = false;
+                v.SocioId = null;
+                v.FechaSocioDesde = null;
+                await _context.SaveChangesAsync();
+            }
+
+            var resumen = await ListarVendedoresAsync(empresaId);
+            return resumen.Vendedores.FirstOrDefault(x => x.VendedorId == vendedorId);
+        }
+
+        public async Task<bool> EliminarVendedorAsync(int vendedorId, int empresaId)
+        {
+            var v = await _context.CrmVendedores
+                .FirstOrDefaultAsync(x => x.VendedorId == vendedorId && x.EmpresaId == empresaId);
+            if (v == null) return false;
+            v.Activo = false;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         // ---------- Propuestas comerciales ----------
 
         private static readonly string[] EstadosPropuesta = { "Enviada", "Ganada", "Perdida" };
 
-        private static CrmPropuestaDto ToPropuestaDto(CrmPropuesta p, CrmCliente? cliente) => new()
+        private static CrmPropuestaDto ToPropuestaDto(CrmPropuesta p, CrmCliente? cliente, CrmVendedor? vendedor = null) => new()
         {
             PropuestaId = p.PropuestaId,
             EmpresaId = p.EmpresaId,
             ClienteId = p.ClienteId,
             ClienteNombre = cliente?.RazonSocial ?? "",
+            VendedorId = p.VendedorId,
+            VendedorNombre = vendedor?.Nombre,
             Descripcion = p.Descripcion,
             MontoGs = p.MontoGs,
             Estado = p.Estado,
@@ -627,10 +843,20 @@ namespace Gesco.Application.Services
                 .Where(c => c.EmpresaId == empresaId && ids.Contains(c.ClienteId))
                 .ToDictionaryAsync(c => c.ClienteId);
 
+            var vendIds = list.Where(p => p.VendedorId != null).Select(p => p.VendedorId!.Value).Distinct().ToList();
+            var vendedores = vendIds.Count == 0
+                ? new Dictionary<int, CrmVendedor>()
+                : await _context.CrmVendedores.AsNoTracking()
+                    .Where(v => v.EmpresaId == empresaId && vendIds.Contains(v.VendedorId))
+                    .ToDictionaryAsync(v => v.VendedorId);
+
             var resumen = new CrmPropuestasResumenDto
             {
                 Propuestas = list
-                    .Select(p => ToPropuestaDto(p, clientes.TryGetValue(p.ClienteId, out var c) ? c : null))
+                    .Select(p => ToPropuestaDto(
+                        p,
+                        clientes.TryGetValue(p.ClienteId, out var c) ? c : null,
+                        p.VendedorId != null && vendedores.TryGetValue(p.VendedorId.Value, out var v) ? v : null))
                     .ToList()
             };
 
@@ -688,6 +914,7 @@ namespace Gesco.Application.Services
             }
 
             entity.ClienteId = request.ClienteId;
+            entity.VendedorId = request.VendedorId;
             entity.Descripcion = (request.Descripcion ?? "").Trim();
             entity.MontoGs = Math.Abs(request.MontoGs);
             entity.Estado = estado;
@@ -726,7 +953,12 @@ namespace Gesco.Application.Services
             }
 
             await _context.SaveChangesAsync();
-            return ToPropuestaDto(entity, cliente);
+
+            var vendedor = entity.VendedorId.HasValue
+                ? await _context.CrmVendedores.AsNoTracking()
+                    .FirstOrDefaultAsync(v => v.VendedorId == entity.VendedorId.Value)
+                : null;
+            return ToPropuestaDto(entity, cliente, vendedor);
         }
 
         public async Task<bool> EliminarPropuestaAsync(int propuestaId, int empresaId)

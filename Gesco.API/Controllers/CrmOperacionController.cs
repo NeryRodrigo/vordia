@@ -178,6 +178,63 @@ namespace Gesco.API.Controllers
             return NoContent();
         }
 
+        // --- Vendedores ---
+        [HttpGet("vendedores")]
+        public async Task<IActionResult> Vendedores([FromQuery] int empresaId, [FromQuery] bool soloActivos = false)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _ops.ListarVendedoresAsync(empresaId, soloActivos));
+        }
+
+        [HttpPost("vendedores")]
+        public async Task<IActionResult> CrearVendedor([FromBody] CrmVendedorUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || string.IsNullOrWhiteSpace(request.Nombre))
+                return BadRequest(new { mensaje = "EmpresaId y Nombre requeridos" });
+            return Ok(await _ops.UpsertVendedorAsync(request));
+        }
+
+        [HttpPut("vendedores/{vendedorId:int}")]
+        public async Task<IActionResult> ActualizarVendedor(int vendedorId, [FromBody] CrmVendedorUpsertRequest request)
+        {
+            if (request.EmpresaId <= 0 || string.IsNullOrWhiteSpace(request.Nombre))
+                return BadRequest(new { mensaje = "EmpresaId y Nombre requeridos" });
+            try
+            {
+                return Ok(await _ops.UpsertVendedorAsync(request, vendedorId));
+            }
+            catch (InvalidOperationException ex)
+            {
+                return NotFound(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpPost("vendedores/{vendedorId:int}/promover-socio")]
+        public async Task<IActionResult> PromoverVendedor(int vendedorId, [FromBody] CrmVendedorPromoverRequest request)
+        {
+            if (request.EmpresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _ops.PromoverVendedorASocioAsync(vendedorId, request);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
+        [HttpPost("vendedores/{vendedorId:int}/quitar-socio")]
+        public async Task<IActionResult> QuitarSocioVendedor(int vendedorId, [FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _ops.QuitarSocioAVendedorAsync(vendedorId, empresaId);
+            if (dto == null) return NotFound();
+            return Ok(dto);
+        }
+
+        [HttpDelete("vendedores/{vendedorId:int}")]
+        public async Task<IActionResult> EliminarVendedor(int vendedorId, [FromQuery] int empresaId)
+        {
+            var ok = await _ops.EliminarVendedorAsync(vendedorId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
         // --- Propuestas comerciales ---
         [HttpGet("propuestas")]
         public async Task<IActionResult> Propuestas(
