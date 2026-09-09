@@ -93,6 +93,7 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
         public DbSet<CrmGasto> CrmGastos { get; set; }
         public DbSet<CrmPropuesta> CrmPropuestas { get; set; }
+        public DbSet<CrmVendedor> CrmVendedores { get; set; }
         public DbSet<CrmObjetivo> CrmObjetivos { get; set; }
         public DbSet<CrmProducto> CrmProductos { get; set; }
         public DbSet<CrmProveedor> CrmProveedores { get; set; }
@@ -174,6 +175,9 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<CrmGasto>().Property(g => g.MontoGs).HasPrecision(18, 2);
             modelBuilder.Entity<CrmPropuesta>().ToTable("CrmPropuestas");
             modelBuilder.Entity<CrmPropuesta>().Property(p => p.MontoGs).HasPrecision(18, 2);
+            modelBuilder.Entity<CrmVendedor>().ToTable("CrmVendedores");
+            modelBuilder.Entity<CrmVendedor>().Property(v => v.ComisionPct).HasPrecision(5, 2);
+            modelBuilder.Entity<CrmVendedor>().Property(v => v.MetaMensualGs).HasPrecision(18, 2);
             modelBuilder.Entity<CrmObjetivo>().ToTable("CrmObjetivos");
             modelBuilder.Entity<CrmProducto>().ToTable("CrmProductos");
             modelBuilder.Entity<CrmProveedor>().ToTable("CrmProveedores");

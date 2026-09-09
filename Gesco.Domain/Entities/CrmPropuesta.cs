@@ -16,6 +16,8 @@ namespace Gesco.Domain.Entities
         public int PropuestaId { get; set; }
         public int EmpresaId { get; set; }
         public int ClienteId { get; set; }
+        /// <summary>Vendedor que trabajó la propuesta. Null si la llevó un socio directamente.</summary>
+        public int? VendedorId { get; set; }
         [Required, StringLength(300)]
         public string Descripcion { get; set; } = "";
         [Column(TypeName = "decimal(18,2)")]

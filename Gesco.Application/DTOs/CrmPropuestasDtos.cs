@@ -10,6 +10,8 @@ namespace Gesco.Application.DTOs
         public int EmpresaId { get; set; }
         public int ClienteId { get; set; }
         public string ClienteNombre { get; set; } = "";
+        public int? VendedorId { get; set; }
+        public string? VendedorNombre { get; set; }
         public string Descripcion { get; set; } = "";
         public decimal MontoGs { get; set; }
         public string Estado { get; set; } = "Enviada";
@@ -28,6 +30,9 @@ namespace Gesco.Application.DTOs
 
         [Required]
         public int ClienteId { get; set; }
+
+        /// <summary>Vendedor que trabajó la propuesta. Null si la llevó un socio.</summary>
+        public int? VendedorId { get; set; }
 
         [Required, StringLength(300)]
         public string Descripcion { get; set; } = "";

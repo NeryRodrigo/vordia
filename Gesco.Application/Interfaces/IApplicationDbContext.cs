@@ -92,6 +92,7 @@ namespace Gesco.Application.Interfaces
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         DbSet<CrmGasto> CrmGastos { get; set; }
         DbSet<CrmPropuesta> CrmPropuestas { get; set; }
+        DbSet<CrmVendedor> CrmVendedores { get; set; }
         DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
         DbSet<CrmObjetivo> CrmObjetivos { get; set; }
         DbSet<CrmProducto> CrmProductos { get; set; }
