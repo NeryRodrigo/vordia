@@ -92,6 +92,32 @@ namespace Gesco.API.Controllers
             }
         }
 
+        [HttpPut("pagos/{pagoId:int}")]
+        public async Task<IActionResult> ActualizarPago(int pagoId, [FromBody] CrmPagoCreateRequest request)
+        {
+            try
+            {
+                if (request.Monto <= 0)
+                    return BadRequest(new { mensaje = "Monto debe ser mayor a 0" });
+                var updated = await _finanzas.ActualizarPagoAsync(pagoId, request);
+                if (updated == null) return NotFound();
+                return Ok(updated);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { mensaje = ex.Message });
+            }
+        }
+
+        [HttpDelete("pagos/{pagoId:int}")]
+        public async Task<IActionResult> EliminarPago(int pagoId, [FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var ok = await _finanzas.EliminarPagoAsync(pagoId, empresaId);
+            if (!ok) return NotFound();
+            return NoContent();
+        }
+
         [HttpGet("ingresos")]
         public async Task<IActionResult> Ingresos([FromQuery] int empresaId)
         {
