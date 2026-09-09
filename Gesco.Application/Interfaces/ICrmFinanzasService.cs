@@ -14,6 +14,8 @@ namespace Gesco.Application.Interfaces
 
         Task<List<CrmPagoDto>> ListarPagosAsync(int empresaId, int? contratoId = null);
         Task<CrmPagoDto> RegistrarPagoAsync(CrmPagoCreateRequest request);
+        Task<CrmPagoDto?> ActualizarPagoAsync(int pagoId, CrmPagoCreateRequest request);
+        Task<bool> EliminarPagoAsync(int pagoId, int empresaId);
         Task<CrmIngresosResumenDto> ObtenerIngresosAsync(int empresaId);
     }
 }

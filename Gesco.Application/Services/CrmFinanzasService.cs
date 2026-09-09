@@ -176,25 +176,76 @@ namespace Gesco.Application.Services
             _context.CrmPagos.Add(pago);
 
             if (request.MarcarContratoAlDia)
-            {
-                contrato.EstadoPago = "Al dia";
-                if (request.NuevoProximoVencimiento.HasValue)
-                    contrato.ProximoVencimiento = request.NuevoProximoVencimiento.Value.Date;
-                else if (contrato.EsRecurrente)
-                {
-                    var baseDate = contrato.ProximoVencimiento?.Date ?? request.FechaPago.Date;
-                    contrato.ProximoVencimiento = contrato.Periodicidad == "Anual"
-                        ? baseDate.AddYears(1)
-                        : baseDate.AddMonths(1);
-                }
-                contrato.FechaActualizacion = DateTime.UtcNow;
-            }
+                AplicarContratoAlDia(contrato, request.FechaPago.Date, request.NuevoProximoVencimiento);
 
             await _context.SaveChangesAsync();
 
             pago.Cliente = contrato.Cliente;
             pago.Contrato = contrato;
             return MapPago(pago);
+        }
+
+        public async Task<CrmPagoDto?> ActualizarPagoAsync(int pagoId, CrmPagoCreateRequest request)
+        {
+            var pago = await _context.CrmPagos
+                .Include(p => p.Cliente)
+                .Include(p => p.Contrato)
+                .FirstOrDefaultAsync(p => p.PagoId == pagoId && p.EmpresaId == request.EmpresaId);
+            if (pago == null) return null;
+
+            var contrato = await _context.CrmContratos
+                .Include(c => c.Cliente)
+                .FirstOrDefaultAsync(c => c.ContratoId == request.ContratoId && c.EmpresaId == request.EmpresaId && c.Activo);
+            if (contrato == null)
+                throw new InvalidOperationException("Contrato no encontrado.");
+
+            pago.ContratoId = contrato.ContratoId;
+            pago.ClienteId = contrato.ClienteId;
+            pago.Monto = request.Monto;
+            pago.FechaPago = request.FechaPago.Date;
+            pago.Periodo = string.IsNullOrWhiteSpace(request.Periodo)
+                ? request.FechaPago.ToString("yyyy-MM")
+                : request.Periodo.Trim();
+            pago.MetodoPago = request.MetodoPago?.Trim();
+            pago.Concepto = string.IsNullOrWhiteSpace(request.Concepto) ? "Fee mensual" : request.Concepto.Trim();
+            pago.Notas = request.Notas;
+            if (request.UsuarioId.HasValue) pago.UsuarioId = request.UsuarioId;
+            if (!string.IsNullOrWhiteSpace(request.UsuarioNombre)) pago.UsuarioNombre = request.UsuarioNombre;
+
+            if (request.MarcarContratoAlDia)
+                AplicarContratoAlDia(contrato, request.FechaPago.Date, request.NuevoProximoVencimiento);
+
+            await _context.SaveChangesAsync();
+
+            pago.Cliente = contrato.Cliente;
+            pago.Contrato = contrato;
+            return MapPago(pago);
+        }
+
+        public async Task<bool> EliminarPagoAsync(int pagoId, int empresaId)
+        {
+            var pago = await _context.CrmPagos
+                .FirstOrDefaultAsync(p => p.PagoId == pagoId && p.EmpresaId == empresaId);
+            if (pago == null) return false;
+
+            var contratoId = pago.ContratoId;
+            _context.CrmPagos.Remove(pago);
+            await _context.SaveChangesAsync();
+
+            var contrato = await _context.CrmContratos
+                .FirstOrDefaultAsync(c => c.ContratoId == contratoId && c.EmpresaId == empresaId && c.Activo);
+            if (contrato != null)
+            {
+                var quedan = await _context.CrmPagos.CountAsync(p => p.ContratoId == contratoId);
+                if (quedan == 0)
+                {
+                    contrato.EstadoPago = "Pendiente";
+                    contrato.FechaActualizacion = DateTime.UtcNow;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
+            return true;
         }
 
         public async Task<CrmIngresosResumenDto> ObtenerIngresosAsync(int empresaId)
@@ -220,6 +271,21 @@ namespace Gesco.Application.Services
                 Recurrentes = recurrentes,
                 UltimosPagos = pagos.Take(15).ToList()
             };
+        }
+
+        private static void AplicarContratoAlDia(CrmContrato contrato, DateTime fechaPago, DateTime? nuevoVencimiento)
+        {
+            contrato.EstadoPago = "Al dia";
+            if (nuevoVencimiento.HasValue)
+                contrato.ProximoVencimiento = nuevoVencimiento.Value.Date;
+            else if (contrato.EsRecurrente)
+            {
+                var baseDate = contrato.ProximoVencimiento?.Date ?? fechaPago.Date;
+                contrato.ProximoVencimiento = contrato.Periodicidad == "Anual"
+                    ? baseDate.AddYears(1)
+                    : baseDate.AddMonths(1);
+            }
+            contrato.FechaActualizacion = DateTime.UtcNow;
         }
 
         private async Task ValidarClienteAsync(int empresaId, int clienteId)
