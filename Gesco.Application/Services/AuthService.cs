@@ -88,18 +88,25 @@ namespace Gesco.Application.Services
 
         public async Task<AuthUserResponse?> LoginAsync(LoginRequest request)
         {
+            const string accesoNoConfigurado =
+                "Usuario y/o entorno de trabajo no configurado, intente con otro usuario";
+
+            var email = (request.Email ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(email) || request.EmpresaId <= 0)
+                throw new Exception(accesoNoConfigurado);
+
             var usuario = await _context.Usuarios
                                         .Include(u => u.Empresa)
-                                        .FirstOrDefaultAsync(u => u.Email == request.Email);
+                                        .FirstOrDefaultAsync(u => u.Email == email);
 
-            // 1. Validar credenciales básicas
             if (usuario == null || !BCrypt.Net.BCrypt.Verify(request.Password, usuario.PasswordHash))
-                return null;
+                throw new Exception(accesoNoConfigurado);
 
-            // 2. VALIDACIÓN DE ESTADO (EL BLOQUEO)
+            if (usuario.EmpresaId != request.EmpresaId)
+                throw new Exception(accesoNoConfigurado);
+
             if (usuario.Estado != "ACTIVO")
             {
-                // Lanzamos una excepción con el mensaje exacto para el Frontend
                 throw new Exception($"Tu cuenta se encuentra en estado {usuario.Estado}. Contacta con el administrador de GESCO.");
             }
 

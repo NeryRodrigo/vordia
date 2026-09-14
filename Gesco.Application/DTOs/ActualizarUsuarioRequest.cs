@@ -13,6 +13,7 @@ namespace Gesco.Application.DTOs
         public string Email { get; set; }
         public string Rol { get; set; }
         public string Estado { get; set; }
+        public int EmpresaId { get; set; }
         public List<int> ModulosIds { get; set; } = new List<int>();
     }
 }

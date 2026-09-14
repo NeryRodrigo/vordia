@@ -27,6 +27,12 @@ namespace Gesco.API.Controllers
             return Ok(usuarios);
         }
 
+        [HttpGet("lista-completa")]
+        public async Task<IActionResult> GetListaCompleta()
+        {
+            return Ok(await _usuarioService.GetTodosUsuariosAsync());
+        }
+
         [HttpGet("modulos-por-rubro/{rubro}")]
         public async Task<IActionResult> GetModulosPorRubro(string rubro)
         {

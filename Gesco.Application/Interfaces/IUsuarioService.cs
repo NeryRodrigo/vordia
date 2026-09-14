@@ -8,6 +8,7 @@ namespace Gesco.Application.Interfaces
     public interface IUsuarioService
     {
         Task<List<UsuarioDto>> GetUsuariosPorEmpresaAsync(int empresaId);
+        Task<List<UsuarioDto>> GetTodosUsuariosAsync();
         Task<bool> CambiarRolAsync(CambiarRolRequest request);
         Task<bool> EliminarUsuarioAsync(int usuarioId);
 

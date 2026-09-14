@@ -32,6 +32,44 @@ namespace Gesco.Application.Services
                     Estado = u.Estado,
                     RequiereCambioPass = u.RequiereCambioPass,
                     Iniciales = u.Nombre.Length >= 2 ? u.Nombre.Substring(0, 2).ToUpper() : "U",
+                    EmpresaId = u.EmpresaId,
+                    EmpresaNombre = u.Empresa != null ? u.Empresa.RazonSocial : "",
+                    ModulosIds = u.UsuarioModulos.Select(um => um.ModuloId).ToList(),
+                    PermisosIds = new List<string>()
+                })
+                .ToListAsync();
+
+            var ids = usuarios.Select(u => u.UsuarioId).ToList();
+            var raw = await _context.Usuarios
+                .Where(u => ids.Contains(u.UsuarioId))
+                .Select(u => new { u.UsuarioId, u.PermisosJson })
+                .ToListAsync();
+            var map = raw.ToDictionary(x => x.UsuarioId, x => PermisosJsonHelper.Parse(x.PermisosJson));
+            foreach (var u in usuarios)
+            {
+                if (map.TryGetValue(u.UsuarioId, out var perms))
+                    u.PermisosIds = perms;
+            }
+
+            return usuarios;
+        }
+
+        public async Task<List<UsuarioDto>> GetTodosUsuariosAsync()
+        {
+            var usuarios = await _context.Usuarios
+                .OrderBy(u => u.Empresa.RazonSocial)
+                .ThenBy(u => u.Nombre)
+                .Select(u => new UsuarioDto
+                {
+                    UsuarioId = u.UsuarioId,
+                    Nombre = u.Nombre,
+                    Email = u.Email,
+                    Rol = u.Rol,
+                    Estado = u.Estado,
+                    RequiereCambioPass = u.RequiereCambioPass,
+                    Iniciales = u.Nombre.Length >= 2 ? u.Nombre.Substring(0, 2).ToUpper() : "U",
+                    EmpresaId = u.EmpresaId,
+                    EmpresaNombre = u.Empresa != null ? u.Empresa.RazonSocial : "",
                     ModulosIds = u.UsuarioModulos.Select(um => um.ModuloId).ToList(),
                     PermisosIds = new List<string>()
                 })
@@ -90,6 +128,12 @@ namespace Gesco.Application.Services
             usuario.Email = request.Email;
             usuario.Rol = request.Rol;
             usuario.Estado = request.Estado;
+            if (request.EmpresaId > 0)
+            {
+                var empresaExiste = await _context.Empresas.AnyAsync(e => e.EmpresaId == request.EmpresaId);
+                if (!empresaExiste) throw new Exception("El entorno de trabajo seleccionado no existe.");
+                usuario.EmpresaId = request.EmpresaId;
+            }
 
             var permisosActuales = _context.UsuarioModulos.Where(um => um.UsuarioId == request.UsuarioId);
             _context.UsuarioModulos.RemoveRange(permisosActuales);
