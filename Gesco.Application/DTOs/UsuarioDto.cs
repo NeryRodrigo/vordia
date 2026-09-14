@@ -18,6 +18,8 @@ namespace Gesco.Application.DTOs
         // Propiedad calculada para el círculo visual (Avatar)
         // Ejemplo: "Juan Pérez" -> "JP"
         public string Iniciales { get; set; }
+        public int EmpresaId { get; set; }
+        public string EmpresaNombre { get; set; } = "";
         public List<int> ModulosIds { get; set; } = new List<int>();
         public List<string> PermisosIds { get; set; } = new List<string>();
     }
