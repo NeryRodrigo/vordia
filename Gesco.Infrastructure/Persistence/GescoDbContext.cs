@@ -98,6 +98,9 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<CrmProducto> CrmProductos { get; set; }
         public DbSet<CrmProveedor> CrmProveedores { get; set; }
         public DbSet<CrmProyecto> CrmProyectos { get; set; }
+        public DbSet<CrmDocumento> CrmDocumentos { get; set; }
+        public DbSet<CrmAutomatizacion> CrmAutomatizaciones { get; set; }
+        public DbSet<CrmAutomatizacionEjecucion> CrmAutomatizacionEjecuciones { get; set; }
 
         public async Task BulkInsertAsync(List<Propiedad> batch)
         {
@@ -222,6 +225,22 @@ namespace Gesco.Infrastructure.Persistence
                 .WithMany()
                 .HasForeignKey(t => t.ClienteId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<CrmDocumento>().ToTable("CrmDocumentos");
+            modelBuilder.Entity<CrmAutomatizacion>().ToTable("CrmAutomatizaciones");
+            modelBuilder.Entity<CrmAutomatizacionEjecucion>().ToTable("CrmAutomatizacionEjecuciones");
+
+            modelBuilder.Entity<CrmDocumento>()
+                .HasOne(d => d.Cliente)
+                .WithMany()
+                .HasForeignKey(d => d.ClienteId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<CrmAutomatizacionEjecucion>()
+                .HasOne(e => e.Automatizacion)
+                .WithMany()
+                .HasForeignKey(e => e.AutomatizacionId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // Aquí puedes configurar precisión de decimales para Guaraníes
             modelBuilder.Entity<Producto>().Property(p => p.PrecioVenta).HasColumnType("decimal(18,2)");

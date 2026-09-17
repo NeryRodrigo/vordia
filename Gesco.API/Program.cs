@@ -195,6 +195,8 @@ builder.Services.AddScoped<IActividadService, ActividadService>();
 builder.Services.AddScoped<ICrmService, CrmService>();
 builder.Services.AddScoped<ICrmFinanzasService, CrmFinanzasService>();
 builder.Services.AddScoped<ICrmOperacionService, CrmOperacionService>();
+builder.Services.AddScoped<ICrmDocumentosService, CrmDocumentosService>();
+builder.Services.AddScoped<ICrmAutomatizacionesService, CrmAutomatizacionesService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSingleton<IAndeCredentialsStore, AndeCredentialsStore>();
 builder.Services.AddHttpClient<IAndeScrapingService, AndeScrapingService>(client =>
@@ -207,6 +209,7 @@ builder.Services.AddHttpClient<IAndeJwtConsultaService, AndeJwtConsultaService>(
     client.Timeout = TimeSpan.FromSeconds(90);
 });
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.AlquilerAlertasBackgroundService>();
+builder.Services.AddHostedService<Gesco.API.BackgroundServices.CrmAutomatizacionesBackgroundService>();
 
 builder.Services.AddDbContext<GescoDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

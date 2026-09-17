@@ -8,6 +8,16 @@ namespace Gesco.Application.Interfaces
         /// <summary>Verifica configuración, conectividad y credenciales del correo saliente.</summary>
         Task<SmtpDiagnosticoDto> DiagnosticarSmtpAsync();
 
+        /// <summary>
+        /// Aviso interno de Vordia HQ (motor de automatizaciones). Si no se indica
+        /// destinatario, se envía a la propia cuenta remitente configurada.
+        /// </summary>
+        Task<(bool Enviado, string? Error)> EnviarNotificacionHqAsync(
+            string? emailDestino,
+            string asunto,
+            string mensaje
+        );
+
         Task<bool> EnviarComprobanteAsync(
             string emailDestino,
             string nombreCliente,

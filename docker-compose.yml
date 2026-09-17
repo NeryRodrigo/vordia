@@ -26,6 +26,9 @@ services:
       - db
     ports:
       - "8080:8080"
+    volumes:
+      # Documentos del CRM: viven en un volumen para que no se borren al reconstruir la imagen
+      - crm_documentos:/app/almacen-crm
 
   frontend:
     build:
@@ -52,3 +55,4 @@ services:
 
 volumes:
   sql_data:
+  crm_documentos:

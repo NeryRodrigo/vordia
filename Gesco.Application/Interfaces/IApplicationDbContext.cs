@@ -99,6 +99,11 @@ namespace Gesco.Application.Interfaces
         DbSet<CrmProveedor> CrmProveedores { get; set; }
         DbSet<CrmProyecto> CrmProyectos { get; set; }
 
+        // VORDIA HQ — documentos y automatizaciones
+        DbSet<CrmDocumento> CrmDocumentos { get; set; }
+        DbSet<CrmAutomatizacion> CrmAutomatizaciones { get; set; }
+        DbSet<CrmAutomatizacionEjecucion> CrmAutomatizacionEjecuciones { get; set; }
+
         Task BulkInsertAsync(List<Propiedad> batch);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

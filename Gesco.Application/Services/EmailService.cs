@@ -322,6 +322,87 @@ namespace Gesco.Application.Services
         /// Gmail muestra las contraseñas de aplicación en grupos de 4 ("abcd efgh ijkl mnop"),
         /// pero al autenticar hay que enviarlas sin espacios.
         /// </summary>
+        public async Task<(bool Enviado, string? Error)> EnviarNotificacionHqAsync(
+            string? emailDestino,
+            string asunto,
+            string mensaje)
+        {
+            try
+            {
+                var smtpServer = _config["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+                var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
+                var senderEmail = _config["EmailSettings:SenderEmail"];
+                var appPassword = LimpiarAppPassword(_config["EmailSettings:AppPassword"]);
+
+                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(appPassword))
+                    return (false, "No están configuradas las credenciales SMTP (EmailSettings) en el servidor.");
+
+                // Sin destinatario explícito el aviso va a la casilla de Vordia
+                var destino = string.IsNullOrWhiteSpace(emailDestino) || !emailDestino.Contains("@")
+                    ? senderEmail
+                    : emailDestino.Trim();
+
+                using var message = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, "Vordia HQ"),
+                    Subject = asunto,
+                    IsBodyHtml = true,
+                    Body = GenerarNotificacionHqHtml(asunto, mensaje)
+                };
+                message.To.Add(new MailAddress(destino));
+
+                using var smtpClient = new SmtpClient(smtpServer, smtpPort)
+                {
+                    Credentials = new NetworkCredential(senderEmail, appPassword),
+                    EnableSsl = true,
+                    Timeout = 25000
+                };
+
+                await smtpClient.SendMailAsync(message);
+                return (true, null);
+            }
+            catch (SmtpException ex)
+            {
+                Console.WriteLine($"Error enviando notificación de Vordia HQ: {ex}");
+                return (false, $"SMTP {ex.StatusCode}: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error enviando notificación de Vordia HQ: {ex}");
+                return (false, ex.Message);
+            }
+        }
+
+        private static string GenerarNotificacionHqHtml(string asunto, string mensaje)
+        {
+            var cuerpo = System.Net.WebUtility.HtmlEncode(mensaje).Replace("\n", "<br/>");
+            var titulo = System.Net.WebUtility.HtmlEncode(asunto);
+
+            return $@"
+<!DOCTYPE html>
+<html lang='es'>
+<head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'></head>
+<body style='margin:0;padding:24px;background:#050B18;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;'>
+  <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:560px;margin:0 auto;background:#0C1327;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;'>
+    <tr>
+      <td style='padding:20px 24px;background:#007bff;'>
+        <div style='color:#ffffff;font-size:12px;letter-spacing:2px;text-transform:uppercase;'>Vordia HQ</div>
+        <div style='color:#ffffff;font-size:19px;font-weight:700;margin-top:4px;'>{titulo}</div>
+      </td>
+    </tr>
+    <tr>
+      <td style='padding:24px;color:#dbe4f5;font-size:15px;line-height:1.6;'>{cuerpo}</td>
+    </tr>
+    <tr>
+      <td style='padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);color:#7c8db5;font-size:12px;'>
+        Aviso generado automáticamente por el motor de automatizaciones. Podés pausar o ajustar esta regla en Vordia HQ · Automatizaciones.
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+        }
+
         private static string LimpiarAppPassword(string? appPassword) =>
             (appPassword ?? string.Empty).Replace(" ", "").Trim();
 
