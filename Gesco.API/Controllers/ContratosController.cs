@@ -234,6 +234,30 @@ namespace Gesco.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>
+        /// Carga el correo del inquilino sin tener que abrir la ficha completa.
+        /// Necesario para que las alertas de vencimiento tengan destinatario.
+        /// </summary>
+        [HttpPatch("{contratoId:int}/email-inquilino")]
+        public async Task<IActionResult> ActualizarEmailInquilino(int contratoId, [FromBody] ActualizarEmailInquilinoRequest request)
+        {
+            var email = request.Email?.Trim() ?? string.Empty;
+            if (!email.Contains("@") || email.Length < 5)
+                return BadRequest(new { success = false, message = "El correo no es válido." });
+
+            var contrato = await _context.ContratosInquilinos
+                .Include(c => c.Inquilino)
+                .FirstOrDefaultAsync(c => c.ContratoId == contratoId);
+
+            if (contrato?.Inquilino == null)
+                return NotFound(new { success = false, message = "No se encontró el inquilino del contrato." });
+
+            contrato.Inquilino.Email = email;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { success = true, email });
+        }
+
         [HttpPost("{id}/desalojar")]
         public async Task<IActionResult> DesalojarUnidad(int id)
         {
@@ -617,23 +641,40 @@ namespace Gesco.API.Controllers
 
             request.NombreUnidad = FormatearNombreUnidad(request.NombreUnidad);
 
-            var result = await _emailService.EnviarAlertaVencimientoAsync(
+            var (enviado, error) = await _emailService.EnviarAlertaVencimientoDetalladoAsync(
                 request.EmailDestino,
                 request.NombreCliente,
                 request.NombreUnidad,
                 request.MontoMensual,
                 request.FechaVencimiento,
-                request.DiasRestantes
+                request.DiasRestantes,
+                request.EmailCopia
             );
 
-            if (result)
-                return Ok(new { success = true, message = "Alerta de vencimiento enviada al inquilino y administrador correctamente." });
+            if (enviado)
+            {
+                var copia = string.IsNullOrWhiteSpace(request.EmailCopia) ? "" : $" (con copia a {request.EmailCopia})";
+                return Ok(new { success = true, message = $"Alerta enviada a {request.EmailDestino}{copia}." });
+            }
 
-            return StatusCode(500, new { success = false, message = "Error al enviar la alerta por SMTP." });
+            return StatusCode(500, new { success = false, message = $"No se pudo enviar la alerta. {error}" });
+        }
+
+        /// <summary>
+        /// Chequea la salida de correo del servidor: configuración, puerto y credenciales.
+        /// Envía un correo de prueba al propio remitente.
+        /// </summary>
+        [HttpPost("diagnostico-smtp")]
+        public async Task<IActionResult> DiagnosticoSmtp()
+        {
+            return Ok(await _emailService.DiagnosticarSmtpAsync());
         }
 
         [HttpPost("simular-alerta-5-dias")]
-        public async Task<IActionResult> SimularAlerta5Dias([FromQuery] string? emailPrueba = null, [FromQuery] int? contratoId = null)
+        public async Task<IActionResult> SimularAlerta5Dias(
+            [FromQuery] string? emailPrueba = null,
+            [FromQuery] int? contratoId = null,
+            [FromQuery] string? emailCopia = null)
         {
             var today = DateTime.Now.Date;
             var contrato = contratoId.HasValue
@@ -656,19 +697,20 @@ namespace Gesco.API.Controllers
             decimal monto = contrato.MontoMensualAlquiler > 0 ? contrato.MontoMensualAlquiler : contrato.MontoMensualGs;
             var fechaVencimiento = today.AddDays(5);
 
-            var result = await _emailService.EnviarAlertaVencimientoAsync(
+            var (result, error) = await _emailService.EnviarAlertaVencimientoDetalladoAsync(
                 emailInquilino,
                 nombreInquilino,
                 nombreUnidad,
                 monto > 0 ? monto : 4500000m,
                 fechaVencimiento,
-                5
+                5,
+                emailCopia
             );
 
             return Ok(new
             {
                 success = result,
-                message = result ? "Alerta simulada de 5 días enviada correctamente." : "Error al enviar la alerta.",
+                message = result ? "Alerta simulada de 5 días enviada correctamente." : $"No se pudo enviar la alerta. {error}",
                 datosEnviados = new
                 {
                     emailDestino = emailInquilino,
@@ -692,9 +734,15 @@ namespace Gesco.API.Controllers
         }
     }
 
+    public class ActualizarEmailInquilinoRequest
+    {
+        public string? Email { get; set; }
+    }
+
     public class EnviarAlertaVencimientoRequest
     {
         public string EmailDestino { get; set; } = string.Empty;
+        public string? EmailCopia { get; set; }
         public string NombreCliente { get; set; } = string.Empty;
         public string NombreUnidad { get; set; } = string.Empty;
         public decimal MontoMensual { get; set; }

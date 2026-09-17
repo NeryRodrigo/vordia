@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Gesco.Application.Interfaces;
 using Gesco.Domain.Entities;
 using System.Collections.Generic;

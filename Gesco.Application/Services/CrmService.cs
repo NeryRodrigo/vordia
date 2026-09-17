@@ -95,6 +95,9 @@ namespace Gesco.Application.Services
                 FechaEstimadaCierre = request.FechaEstimadaCierre,
                 FeeEstimadoMensual = request.FeeEstimadoMensual,
                 Notas = request.Notas,
+                Origen = request.Origen?.Trim() ?? "manual",
+                OrigenDetalle = request.OrigenDetalle?.Trim(),
+                MensajeInicial = request.MensajeInicial,
                 Activo = true,
                 FechaCreacion = DateTime.UtcNow,
                 UsuarioResponsableId = request.UsuarioResponsableId ?? request.UsuarioId
@@ -114,6 +117,94 @@ namespace Gesco.Application.Services
                 Fecha = DateTime.UtcNow,
                 UsuarioId = request.UsuarioId,
                 UsuarioNombre = request.UsuarioNombre
+            });
+            await _context.SaveChangesAsync();
+
+            return Map(entity, 1);
+        }
+
+        public async Task<CrmClienteDto> CrearLeadWebAsync(CrmLeadWebRequest request)
+        {
+            var empresaId = await _context.Empresas.AsNoTracking()
+                .Where(e => e.Rubro == "VORDIA")
+                .OrderBy(e => e.EmpresaId)
+                .Select(e => e.EmpresaId)
+                .FirstOrDefaultAsync();
+
+            if (empresaId == 0)
+                throw new InvalidOperationException("Empresa Vordia no encontrada.");
+
+            var nombre = request.Nombre.Trim();
+            var email = request.Email.Trim();
+            var telefono = string.IsNullOrWhiteSpace(request.Telefono) ? null : request.Telefono.Trim();
+            var codigo = NormalizarSolucion(request.Sector);
+            var solucion = codigo != null ? SolucionesWeb.GetValueOrDefault(codigo) : null;
+
+            var detalle = string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    $"Nombre: {nombre}",
+                    $"Empresa: {request.Empresa.Trim()}",
+                    $"Email: {email}",
+                    telefono != null ? $"Teléfono: {telefono}" : null,
+                    $"Interés: {solucion ?? "Todavía no lo definió"}",
+                    !string.IsNullOrWhiteSpace(request.Necesidad) ? $"Necesidad: {request.Necesidad.Trim()}" : null
+                }.Where(l => l != null));
+
+            // Si la persona vuelve a enviar el formulario, se suma al historial en lugar de duplicar el lead
+            var existente = await _context.CrmClientes
+                .FirstOrDefaultAsync(c => c.EmpresaId == empresaId && c.Activo && c.ContactoEmail == email);
+
+            if (existente != null)
+            {
+                existente.FechaActualizacion = DateTime.UtcNow;
+                _context.CrmHistorial.Add(new CrmHistorial
+                {
+                    ClienteId = existente.ClienteId,
+                    EmpresaId = empresaId,
+                    Tipo = "nota",
+                    Titulo = "Nueva solicitud desde la web",
+                    Detalle = detalle,
+                    Fecha = DateTime.UtcNow,
+                    UsuarioNombre = "Formulario web"
+                });
+                await _context.SaveChangesAsync();
+                return Map(existente, await _context.CrmHistorial.CountAsync(h => h.ClienteId == existente.ClienteId));
+            }
+
+            var entity = new CrmCliente
+            {
+                EmpresaId = empresaId,
+                RazonSocial = request.Empresa.Trim(),
+                Email = email,
+                Telefono = telefono,
+                ContactoNombre = nombre,
+                ContactoEmail = email,
+                ContactoTelefono = telefono,
+                EstadoPipeline = "Prospecto",
+                SistemaServicio = solucion,
+                ProximosPasos = "Contactar — solicitud entrante desde la web",
+                Origen = "web",
+                OrigenDetalle = codigo,
+                MensajeInicial = string.IsNullOrWhiteSpace(request.Necesidad) ? null : request.Necesidad.Trim(),
+                Activo = true,
+                FechaCreacion = DateTime.UtcNow
+            };
+
+            _context.CrmClientes.Add(entity);
+            await _context.SaveChangesAsync();
+
+            _context.CrmHistorial.Add(new CrmHistorial
+            {
+                ClienteId = entity.ClienteId,
+                EmpresaId = empresaId,
+                Tipo = "cambio_estado",
+                Titulo = "Solicitud de demostración desde la web",
+                Detalle = detalle,
+                EstadoNuevo = entity.EstadoPipeline,
+                Fecha = DateTime.UtcNow,
+                UsuarioNombre = "Formulario web"
             });
             await _context.SaveChangesAsync();
 
@@ -145,6 +236,10 @@ namespace Gesco.Application.Services
             entity.FechaEstimadaCierre = request.FechaEstimadaCierre;
             entity.FeeEstimadoMensual = request.FeeEstimadoMensual;
             entity.Notas = request.Notas;
+            if (!string.IsNullOrWhiteSpace(request.Origen))
+                entity.Origen = request.Origen.Trim();
+            if (!string.IsNullOrWhiteSpace(request.OrigenDetalle))
+                entity.OrigenDetalle = request.OrigenDetalle.Trim();
             entity.FechaActualizacion = DateTime.UtcNow;
             if (request.UsuarioResponsableId.HasValue)
                 entity.UsuarioResponsableId = request.UsuarioResponsableId;
@@ -289,6 +384,24 @@ namespace Gesco.Application.Services
             }).ToList();
         }
 
+        /// <summary>Códigos que ofrece el formulario de vordia.com.py → servicio en el CRM.</summary>
+        private static readonly Dictionary<string, string> SolucionesWeb = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["HQ"] = "Vordia HQ — dirección y control",
+            ["HABITAT"] = "Vordia Habitat — inmuebles y alquileres",
+            ["STAY"] = "Vordia Stay — hospedaje y reservas",
+            ["DINE"] = "Vordia Dine — gastronomía",
+            ["RETAIL"] = "Vordia Retail — comercio y stock",
+            ["AGRO"] = "Vordia Agro — campo y campañas"
+        };
+
+        private static string? NormalizarSolucion(string? sector)
+        {
+            if (string.IsNullOrWhiteSpace(sector)) return null;
+            var raw = sector.Trim().ToUpperInvariant();
+            return SolucionesWeb.ContainsKey(raw) ? raw : null;
+        }
+
         private static string? NormalizarEstado(string? estado)
         {
             if (string.IsNullOrWhiteSpace(estado)) return null;
@@ -324,6 +437,9 @@ namespace Gesco.Application.Services
             FechaEstimadaCierre = c.FechaEstimadaCierre,
             FeeEstimadoMensual = c.FeeEstimadoMensual,
             Notas = c.Notas,
+            Origen = c.Origen,
+            OrigenDetalle = c.OrigenDetalle,
+            MensajeInicial = c.MensajeInicial,
             Activo = c.Activo,
             FechaCreacion = c.FechaCreacion,
             FechaActualizacion = c.FechaActualizacion,

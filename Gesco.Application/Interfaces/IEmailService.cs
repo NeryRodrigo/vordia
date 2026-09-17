@@ -1,9 +1,13 @@
 using System.Threading.Tasks;
+using Gesco.Application.DTOs;
 
 namespace Gesco.Application.Interfaces
 {
     public interface IEmailService
     {
+        /// <summary>Verifica configuración, conectividad y credenciales del correo saliente.</summary>
+        Task<SmtpDiagnosticoDto> DiagnosticarSmtpAsync();
+
         Task<bool> EnviarComprobanteAsync(
             string emailDestino,
             string nombreCliente,
@@ -20,7 +24,22 @@ namespace Gesco.Application.Interfaces
             string nombreUnidad,
             decimal montoMensual,
             DateTime fechaVencimiento,
-            int diasRestantes
+            int diasRestantes,
+            string? emailCopia = null
+        );
+
+        /// <summary>
+        /// Igual que EnviarAlertaVencimientoAsync pero devuelve el motivo de la falla,
+        /// para poder mostrarlo en pantalla en lugar de un error genérico.
+        /// </summary>
+        Task<(bool Enviado, string? Error)> EnviarAlertaVencimientoDetalladoAsync(
+            string emailInquilino,
+            string nombreInquilino,
+            string nombreUnidad,
+            decimal montoMensual,
+            DateTime fechaVencimiento,
+            int diasRestantes,
+            string? emailCopia = null
         );
     }
 }

@@ -1,0 +1,20 @@
+VORDIA AGRO + AGROFIELD — acceso
+================================
+
+Empresa en GESCO_DB: Agrofield (Rubro AGRO)
+
+Usuarios Agrofield (ven el prototipo al login):
+  juan.quinonez@agrofield.com.py / juan12345
+  nery.chavez@agrofield.com.py   / nery12345
+  admin@agrofield.com.py         / nery12345
+
+También desde HQ (Nery Vordia):
+  nery.chavez@vordia.com.py + tu password → Inicio "Agrofield" o /agro
+
+Scripts:
+  1) Create_Vordia_Agro.sql
+  2) Seed_Agrofield_Empresa.sql
+  3) Seed_Agrofield_Usuario_Juan.sql  (si solo falta Juan)
+
+Subir al servidor: copiar esos .sql y ejecutar en orden en GESCO_DB;
+reiniciar API; desplegar gesco-web con app/agro + shell AGRO.

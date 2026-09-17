@@ -1,0 +1,42 @@
+VORDIA STAY — cómo probar (sin tocar HQ / Habitat)
+==================================================
+
+1) SQL (GESCO_DB)
+   - Ejecutar: Scripts/Create_Vordia_Stay.sql
+   - (Opcional) Scripts/Seed_Vordia_Stay_Demo.sql
+
+2) Backend
+   - Reiniciar Gesco.API
+   - Probar: GET http://localhost:5034/api/Stay/ping
+     (con JWT de sesión, igual que el resto de la API)
+
+3) Frontend
+   - Correr gesco-web (npm run dev)
+   - Iniciar sesión normal en /
+   - Abrir en el navegador: http://localhost:3000/stay
+     (consola de prueba dedicada; NO está en el menú de Agus/HQ a propósito)
+
+4) Qué podés hacer en /stay
+   - Ver ping / estado del producto
+   - Consultar disponibilidad (usa Habitaciones + Reservas + StayBloqueos)
+   - Crear tarifas Stay
+   - Crear bloqueos de calendario
+   - Check-in / Check-out de reservas existentes
+   - Registrar pagos Stay (actualiza MontoPagadoGs de la Reserva)
+
+5) APIs principales
+   GET  /api/Stay/ping
+   GET  /api/Stay/disponibilidad?empresaId=7&desde=YYYY-MM-DD&hasta=YYYY-MM-DD
+   GET/POST /api/Stay/tarifas
+   GET/POST /api/Stay/pagos
+   GET/POST /api/Stay/bloqueos
+   GET/POST /api/Stay/huespedes
+   POST /api/Stay/reservas/{id}/check-in?empresaId=7
+   POST /api/Stay/reservas/{id}/check-out?empresaId=7
+   (Habitaciones/Reservas siguen en /api/Habitaciones y /api/Reservas)
+
+6) Qué NO se modificó
+   - app/vordia (HQ)
+   - app/condominio (Habitat)
+   - app/fontana (sigue igual)
+   - app/page.tsx shell / menú lateral

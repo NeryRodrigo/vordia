@@ -7,6 +7,8 @@ using System.Net.Mime;
 using System.Text;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System.Net.Sockets;
+using Gesco.Application.DTOs;
 using Gesco.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 
@@ -37,7 +39,7 @@ namespace Gesco.Application.Services
                 var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
                 var senderName = _config["EmailSettings:SenderName"] ?? "Fontana - Administración";
                 var senderEmail = _config["EmailSettings:SenderEmail"];
-                var appPassword = _config["EmailSettings:AppPassword"];
+                var appPassword = LimpiarAppPassword(_config["EmailSettings:AppPassword"]);
 
                 if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(appPassword))
                 {
@@ -151,7 +153,22 @@ namespace Gesco.Application.Services
             string nombreUnidad,
             decimal montoMensual,
             DateTime fechaVencimiento,
-            int diasRestantes)
+            int diasRestantes,
+            string? emailCopia = null)
+        {
+            var (enviado, _) = await EnviarAlertaVencimientoDetalladoAsync(
+                emailInquilino, nombreInquilino, nombreUnidad, montoMensual, fechaVencimiento, diasRestantes, emailCopia);
+            return enviado;
+        }
+
+        public async Task<(bool Enviado, string? Error)> EnviarAlertaVencimientoDetalladoAsync(
+            string emailInquilino,
+            string nombreInquilino,
+            string nombreUnidad,
+            decimal montoMensual,
+            DateTime fechaVencimiento,
+            int diasRestantes,
+            string? emailCopia = null)
         {
             nombreUnidad = FormatearNombreUnidad(nombreUnidad);
             try
@@ -160,7 +177,7 @@ namespace Gesco.Application.Services
                 var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
                 var senderName = _config["EmailSettings:SenderName"] ?? "Fontana - Administración";
                 var senderEmail = _config["EmailSettings:SenderEmail"];
-                var appPassword = _config["EmailSettings:AppPassword"];
+                var appPassword = LimpiarAppPassword(_config["EmailSettings:AppPassword"]);
 
                 if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(appPassword))
                 {
@@ -176,8 +193,18 @@ namespace Gesco.Application.Services
                     message.To.Add(new MailAddress(emailInquilino.Trim()));
                 }
 
+                // Copia al correo de administración indicado en el panel de alertas
+                if (!string.IsNullOrWhiteSpace(emailCopia) && emailCopia.Contains("@")
+                    && !string.Equals(emailCopia.Trim(), emailInquilino?.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    message.CC.Add(new MailAddress(emailCopia.Trim()));
+                }
+
                 // Copia/Alerta para el Administrador del Sistema
                 message.Bcc.Add(new MailAddress(senderEmail, "Vordia Administrador"));
+
+                if (message.To.Count == 0 && message.CC.Count == 0)
+                    return (false, "No hay destinatario válido: el inquilino no tiene correo y no se indicó copia.");
 
                 var diasTexto = diasRestantes == 0 ? "HOY" : $"en {diasRestantes} días";
                 message.Subject = diasRestantes == 0
@@ -194,18 +221,109 @@ namespace Gesco.Application.Services
                 using var smtpClient = new SmtpClient(smtpServer, smtpPort)
                 {
                     Credentials = new NetworkCredential(senderEmail, appPassword),
-                    EnableSsl = true
+                    EnableSsl = true,
+                    Timeout = 25000
                 };
 
                 await smtpClient.SendMailAsync(message);
-                return true;
+                return (true, null);
+            }
+            catch (SmtpException ex)
+            {
+                var detalle = $"SMTP {ex.StatusCode}: {ex.Message}";
+                Console.WriteLine($"Error enviando alerta de vencimiento por correo: {ex}");
+                return (false, detalle);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error enviando alerta de vencimiento por correo: {ex.Message}");
-                return false;
+                Console.WriteLine($"Error enviando alerta de vencimiento por correo: {ex}");
+                return (false, ex.Message);
             }
         }
+
+        public async Task<SmtpDiagnosticoDto> DiagnosticarSmtpAsync()
+        {
+            var smtpServer = _config["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
+            var senderName = _config["EmailSettings:SenderName"] ?? "Fontana - Administración";
+            var senderEmail = _config["EmailSettings:SenderEmail"];
+            var appPassword = LimpiarAppPassword(_config["EmailSettings:AppPassword"]);
+
+            var dto = new SmtpDiagnosticoDto
+            {
+                SmtpServer = smtpServer,
+                SmtpPort = smtpPort,
+                SenderEmail = string.IsNullOrWhiteSpace(senderEmail) ? "(no configurado)" : senderEmail,
+                TienePassword = !string.IsNullOrWhiteSpace(appPassword),
+                LargoPassword = (appPassword ?? string.Empty).Replace(" ", "").Length
+            };
+
+            if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(appPassword))
+            {
+                dto.Resumen = "Faltan las credenciales SMTP (EmailSettings) en la configuración del servidor.";
+                return dto;
+            }
+
+            // 1) ¿El servidor puede abrir el puerto? Si falla acá, es firewall y no credenciales.
+            try
+            {
+                using var tcp = new TcpClient();
+                var conexion = tcp.ConnectAsync(smtpServer, smtpPort);
+                var completada = await Task.WhenAny(conexion, Task.Delay(TimeSpan.FromSeconds(8)));
+                if (completada != conexion || !tcp.Connected)
+                    throw new TimeoutException($"Sin respuesta de {smtpServer}:{smtpPort} en 8 segundos.");
+                dto.ConexionOk = true;
+            }
+            catch (Exception ex)
+            {
+                dto.ConexionError = ex.Message;
+                dto.Resumen = $"El servidor no logra salir al puerto {smtpPort}. Es un bloqueo de red o firewall, no un problema de credenciales.";
+                return dto;
+            }
+
+            // 2) Envío real de prueba al propio remitente: valida credenciales de Gmail.
+            try
+            {
+                using var message = new MailMessage(
+                    new MailAddress(senderEmail, senderName),
+                    new MailAddress(senderEmail))
+                {
+                    Subject = "Prueba de configuración de correo — Vordia",
+                    Body = $"Correo de prueba enviado el {DateTime.Now:dd/MM/yyyy HH:mm}. Si lo estás leyendo, el envío desde el servidor funciona.",
+                    IsBodyHtml = false
+                };
+
+                using var smtp = new SmtpClient(smtpServer, smtpPort)
+                {
+                    Credentials = new NetworkCredential(senderEmail, appPassword),
+                    EnableSsl = true,
+                    Timeout = 20000
+                };
+
+                await smtp.SendMailAsync(message);
+                dto.EnvioOk = true;
+                dto.Resumen = $"Correo saliente funcionando. Se envió una prueba a {senderEmail}.";
+            }
+            catch (SmtpException ex)
+            {
+                dto.EnvioError = $"SMTP {ex.StatusCode}: {ex.Message}";
+                dto.Resumen = "Conecta al servidor de Gmail pero rechaza el envío. Revisá la contraseña de aplicación.";
+            }
+            catch (Exception ex)
+            {
+                dto.EnvioError = ex.Message;
+                dto.Resumen = "Falló el envío de prueba.";
+            }
+
+            return dto;
+        }
+
+        /// <summary>
+        /// Gmail muestra las contraseñas de aplicación en grupos de 4 ("abcd efgh ijkl mnop"),
+        /// pero al autenticar hay que enviarlas sin espacios.
+        /// </summary>
+        private static string LimpiarAppPassword(string? appPassword) =>
+            (appPassword ?? string.Empty).Replace(" ", "").Trim();
 
         /// <summary>
         /// Resuelve logos en wwwroot/email (misma convención que plantillas del API).

@@ -9,6 +9,7 @@ namespace Gesco.Application.Interfaces
         Task<List<CrmClienteDto>> ListarClientesAsync(int empresaId, string? estado = null, string? q = null);
         Task<CrmClienteDto?> ObtenerClienteAsync(int clienteId, int empresaId);
         Task<CrmClienteDto> CrearClienteAsync(CrmClienteUpsertRequest request);
+        Task<CrmClienteDto> CrearLeadWebAsync(CrmLeadWebRequest request);
         Task<CrmClienteDto?> ActualizarClienteAsync(int clienteId, CrmClienteUpsertRequest request);
         Task<bool> EliminarClienteAsync(int clienteId, int empresaId);
         Task<CrmClienteDto?> CambiarEstadoAsync(int clienteId, int empresaId, CrmCambiarEstadoRequest request);

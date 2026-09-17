@@ -1,0 +1,524 @@
+
+
+Contenido maestro de la web institucional
+Arquitectura narrativa y textos aprobables para diseÃ±o y desarrollo
+VersiÃ³n 2.0 | 10 de septiembre de 2026
+
+PropÃ³sito del documento
+Este documento define quÃ© debe comunicar la web de VORDIA, en quÃ© orden y con quÃ© tono. La conclusiÃ³n estratÃ©gica es clara: la marca puede diferenciarse con una experiencia visual propia, pero el visitante debe comprender rÃ¡pidamente quÃ© es VORDIA, quÃ© problema resuelve, quÃ© soluciones ofrece y cuÃ¡l es el siguiente paso comercial.
+La propuesta visual se desarrollarÃ¡ despuÃ©s de aprobar este contenido. Ninguna cifra, integraciÃ³n, cliente, testimonio, disponibilidad o capacidad proyectada deberÃ¡ publicarse sin validaciÃ³n interna.
+
+Decisiones estratÃ©gicas
+La web debe presentar a VORDIA como un ecosistema B2B de soluciones especializadas. No debe parecer una agencia, un sistema genÃ©rico ni una colecciÃ³n de productos sin relaciÃ³n.
+Concepto rector
+Muchas partes. Una sola operaciÃ³n.
+La idea resume el problema empresarial que VORDIA aborda: Ã¡reas, personas, datos y procesos que forman una misma empresa, pero que con frecuencia funcionan de manera desconectada. TambiÃ©n ofrece una base conceptual propia para el futuro sistema visual sin alterar el logotipo oficial.
+Posicionamiento
+VORDIA desarrolla plataformas de gestiÃ³n especializadas que conectan procesos, informaciÃ³n y decisiones para que las distintas Ã¡reas de una empresa avancen con mayor coordinaciÃ³n y visibilidad.
+Promesa
+Una visiÃ³n mÃ¡s clara de lo que ocurre. Una mejor base para decidir quÃ© hacer despuÃ©s.
+Principios de comunicaciÃ³n
+Claridad antes que extravagancia: la diferencia debe reforzar la comprensiÃ³n.
+Beneficios antes que funciones: vender control, visibilidad y capacidad de decisiÃ³n.
+EspecializaciÃ³n real: cada producto habla desde los procesos de su sector.
+Una familia reconocible: todos los productos comparten una lÃ³gica verbal y tecnolÃ³gica.
+Prueba antes que promesa: no publicar capacidades o resultados sin validaciÃ³n.
+Una acciÃ³n comercial dominante: solicitar una demostraciÃ³n.
+Arquitectura pÃºblica
+SoluciÃ³n
+Sector
+Tratamiento web
+HABITAT
+Edificios y condominios
+PÃ¡gina propia
+STAY
+Hoteles, hostales y alojamientos
+PÃ¡gina propia
+DINE
+Restaurantes y cafeterÃ­as
+PÃ¡gina propia
+RETAIL
+Comercios generales, incluidas librerÃ­as
+PÃ¡gina propia
+BOUTIQUE
+Boutiques, moda, venta y alquiler
+PÃ¡gina propia
+OPS
+DepÃ³sitos, logÃ­stica y operaciones
+PÃ¡gina propia
+AGRO
+ProducciÃ³n agrÃ­cola
+PÃ¡gina propia
+HQ
+AdministraciÃ³n interna de VORDIA
+No publicar como producto
+Sistema Shalom
+Alcance pendiente
+No publicar hasta definirlo
+
+NavegaciÃ³n y estructura
+El recorrido debe ser singular en su presentaciÃ³n, pero familiar en su uso. El visitante no debe aprender a navegar para entender la propuesta.
+MenÃº principal
+Soluciones
+CÃ³mo funciona
+Por quÃ© VORDIA
+Empresa
+Contacto
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+AcciÃ³n utilitaria: Acceder. Debe dirigir al entorno de autenticaciÃ³n y no confundirse con el contacto comercial.
+Mapa de pÃ¡ginas
+PÃ¡gina
+Pregunta que responde
+ConversiÃ³n
+Inicio
+QuÃ© es VORDIA y por quÃ© importa
+Encontrar soluciÃ³n o solicitar demo
+Soluciones
+QuÃ© producto corresponde a mi empresa
+Explorar producto
+Producto
+QuÃ© resuelve y cÃ³mo se aplica a mi sector
+Solicitar demo
+CÃ³mo funciona
+CÃ³mo se implementa la soluciÃ³n
+Iniciar conversaciÃ³n
+Por quÃ© VORDIA
+QuÃ© diferencia su enfoque
+Conocer propuesta
+Empresa
+QuiÃ©n es VORDIA y quÃ© busca construir
+Generar confianza
+Contacto
+CÃ³mo conversar con el equipo
+Enviar consulta
+
+PÃ¡gina de inicio
+La portada debe explicar la propuesta completa sin intentar describir todas las funciones. Su trabajo es ayudar al visitante a reconocerse, comprender el enfoque, encontrar su sector y avanzar.
+Apertura
+TECNOLOGÃA PARA LA GESTIÃ“N EMPRESARIAL
+Muchas partes. Una sola operaciÃ³n.
+VORDIA desarrolla plataformas especializadas que conectan procesos, informaciÃ³n y decisiones para que cada Ã¡rea de una empresa avance con mayor coordinaciÃ³n y visibilidad.
+AcciÃ³n principal: EncontrÃ¡ tu soluciÃ³n.
+AcciÃ³n secundaria: Solicitar una demostraciÃ³n.
+Familia visible: HABITAT Â· STAY Â· DINE Â· RETAIL Â· BOUTIQUE Â· OPS Â· AGRO.
+La realidad del cliente
+Tu empresa estÃ¡ conectada. Pero su informaciÃ³n, muchas veces, no.
+Ventas trabaja por un lado. AdministraciÃ³n por otro. El inventario se actualiza en una planilla, los pagos se controlan en otro lugar y las decisiones dependen de informaciÃ³n que llega tarde. La empresa continÃºa funcionando, pero cada nueva tarea, cliente o sucursal hace mÃ¡s difÃ­cil conservar una visiÃ³n completa.
+Crecer no deberÃ­a significar perder visibilidad.
+La respuesta
+VORDIA reÃºne lo que hoy funciona separado.
+Cada soluciÃ³n organiza los procesos esenciales de un sector y los convierte en una experiencia de gestiÃ³n mÃ¡s clara, coordinada y controlable.
+Unifica la informaciÃ³n para reducir bÃºsquedas y duplicaciones.
+Coordina procesos, tareas, movimientos y responsables.
+Presenta los datos relevantes para facilitar decisiones.
+AcompaÃ±a nuevas operaciones, usuarios, unidades o sucursales.
+PresentaciÃ³n del ecosistema
+Una tecnologÃ­a comÃºn. Una soluciÃ³n para cada realidad.
+No todas las empresas funcionan igual. VORDIA combina una base tecnolÃ³gica compartida con soluciones desarrolladas alrededor de los procesos de cada sector.
+Producto
+Mensaje breve
+HABITAT
+Edificios y condominios mejor administrados.
+STAY
+Cada alojamiento, reserva y huÃ©sped bajo seguimiento.
+DINE
+Toda la dinÃ¡mica gastronÃ³mica dentro de una misma gestiÃ³n.
+RETAIL
+Del inventario a la venta, cada movimiento relacionado.
+BOUTIQUE
+GestiÃ³n especializada para el mundo de la moda.
+OPS
+MÃ¡s trazabilidad para operaciones que no pueden detenerse.
+AGRO
+InformaciÃ³n organizada para cada etapa productiva.
+
+La manera VORDIA
+Antes de hablar de tecnologÃ­a, entendemos cÃ³mo funciona tu empresa.
+Observamos la operaciÃ³n, identificamos los puntos de fricciÃ³n y determinamos quÃ© informaciÃ³n necesita estar conectada. A partir de esa comprensiÃ³n, se define la soluciÃ³n adecuada y su alcance real.
+1. Comprender la operaciÃ³n.
+2. Estructurar procesos e informaciÃ³n.
+3. Implementar la soluciÃ³n adecuada.
+4. Conectar Ã¡reas y movimientos.
+5. AcompaÃ±ar la evoluciÃ³n.
+La tecnologÃ­a debe adaptarse a la operaciÃ³n. La operaciÃ³n no deberÃ­a deformarse para adaptarse a la tecnologÃ­a.
+DiferenciaciÃ³n
+No desarrollamos funciones aisladas. DiseÃ±amos operaciones conectadas.
+VORDIA parte de una necesidad empresarial concreta: comprender quÃ© ocurre, reducir desconexiones y contar con una base mÃ¡s confiable para decidir. Cada soluciÃ³n mantiene la profundidad de su sector sin perder la coherencia del ecosistema.
+Cierre
+Tu empresa ya funciona. Hagamos que funcione con una visiÃ³n compartida.
+Contanos cÃ³mo se gestiona hoy tu empresa y conversemos sobre quÃ© informaciÃ³n, procesos o Ã¡reas necesitan estar mejor conectados.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA HABITAT
+GestiÃ³n para edificios y condominios
+Una comunidad funciona mejor cuando toda su gestiÃ³n estÃ¡ conectada.
+VORDIA HABITAT reÃºne administraciÃ³n, finanzas, mantenimiento y comunicaciÃ³n en una plataforma diseÃ±ada para edificios, condominios y comunidades residenciales.
+MÃ¡s claridad para quienes administran. MÃ¡s transparencia para quienes viven.
+Administrar una comunidad implica mucho mÃ¡s que cobrar expensas.
+Pagos, gastos, proveedores, mantenimientos, residentes, solicitudes y comunicaciones deben coordinarse continuamente. Cuando la informaciÃ³n se distribuye entre planillas, mensajes y documentos, sostener el control requiere cada vez mÃ¡s esfuerzo.
+Todo lo que sostiene una comunidad, dentro de una misma gestiÃ³n.
+HABITAT relaciona los movimientos financieros con las unidades, personas, proveedores y tareas que los originan. La administraciÃ³n no observa datos aislados: comprende el contexto y puede acompaÃ±ar cada responsabilidad.
+Alcance de la soluciÃ³n
+Unidades, propietarios, residentes e inquilinos.
+Expensas, cobranzas, saldos y comprobantes.
+Ingresos, egresos, proveedores y rendiciones.
+Incidencias, tareas y mantenimiento preventivo.
+Espacios comunes y reservas.
+Avisos, notificaciones y documentos.
+Indicadores y reportes por edificio o sede.
+Diferencia VORDIA
+Cada movimiento tiene un origen. Cada responsabilidad, un seguimiento.
+Pensado para
+Administradores, propietarios, residentes, comitÃ©s y equipos operativos.
+Cierre comercial
+ConocÃ© cÃ³mo VORDIA HABITAT puede ordenar la gestiÃ³n de tu comunidad.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA STAY
+GestiÃ³n para hoteles y alojamientos
+Cada estadÃ­a forma parte de una operaciÃ³n mÃ¡s grande.
+VORDIA STAY conecta disponibilidad, reservas, huÃ©spedes, pagos y funcionamiento interno para ofrecer una visiÃ³n clara de cada alojamiento, habitaciÃ³n y sede.
+MÃ¡s control sobre la ocupaciÃ³n. MÃ¡s claridad sobre el negocio.
+Una habitaciÃ³n puede estar ocupada sin que toda la informaciÃ³n estÃ© actualizada.
+Las reservas llegan por distintos canales, las estadÃ­as pueden ser diarias o mensuales y los pagos, la limpieza y el mantenimiento avanzan a ritmos diferentes. Sin una visiÃ³n comÃºn, el equipo debe verificar manualmente quÃ© ocurriÃ³ y quÃ© falta resolver.
+Cada huÃ©sped, habitaciÃ³n y movimiento dentro de una misma gestiÃ³n.
+STAY acompaÃ±a lo que ocurre antes, durante y despuÃ©s de la estadÃ­a. Cuando existen varios establecimientos, permite analizar cada sede sin perder la visiÃ³n general de la actividad.
+Alcance de la soluciÃ³n
+Habitaciones, camas y disponibilidad.
+Reservas y calendario de ocupaciÃ³n.
+HuÃ©spedes y estadÃ­as diarias o mensuales.
+Entradas, salidas, cobros y saldos pendientes.
+Limpieza, mantenimiento y tareas internas.
+Ingresos, egresos e informaciÃ³n por sede.
+Indicadores de ocupaciÃ³n y resultados.
+Diferencia VORDIA
+Una reserva es el comienzo. La operaciÃ³n continÃºa durante toda la estadÃ­a.
+Pensado para
+Hoteles, hostales, apart hoteles y alojamientos con estadÃ­as diarias o mensuales.
+Cierre comercial
+ConocÃ© mejor cada sede y mantenÃ© una visiÃ³n completa de toda la operaciÃ³n.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA DINE
+GestiÃ³n para gastronomÃ­a
+Del pedido al resultado, todo sucede en minutos.
+VORDIA DINE conecta ventas, cocina, inventario, caja y costos para que restaurantes y cafeterÃ­as puedan gestionar su actividad con mayor coordinaciÃ³n y visibilidad.
+MÃ¡s coordinaciÃ³n durante el servicio. MÃ¡s informaciÃ³n despuÃ©s de cada venta.
+Vender mÃ¡s no siempre significa conocer mejor el negocio.
+Cada venta moviliza productos, ingredientes, personas, tiempos y dinero. Cuando esas Ã¡reas no comparten informaciÃ³n, resulta difÃ­cil actualizar existencias, seguir el abastecimiento y comprender quÃ© deja cada operaciÃ³n.
+Una sola gestiÃ³n desde el pedido hasta la lectura del resultado.
+DINE no observa la venta como un dato aislado. La relaciona con los productos, insumos, movimientos de caja y procesos que la hicieron posible.
+Alcance de la soluciÃ³n
+MenÃº, productos y precios.
+Mesas, comandas y pedidos.
+PreparaciÃ³n y cocina.
+Ventas, caja y medios de pago.
+Inventario e insumos.
+Compras y proveedores.
+Costos, gastos e indicadores.
+Diferencia VORDIA
+No alcanza con saber cuÃ¡nto se vendiÃ³. TambiÃ©n es necesario comprender quÃ© ocurriÃ³ para lograr esa venta.
+Pensado para
+Restaurantes, cafeterÃ­as y otros negocios gastronÃ³micos.
+Cierre comercial
+HacÃ© visible todo lo que ocurre detrÃ¡s de cada pedido.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA RETAIL
+GestiÃ³n para comercios
+Cada venta empieza mucho antes de llegar a la caja.
+VORDIA RETAIL conecta productos, inventario, compras, clientes y ventas para que comercios y cadenas minoristas puedan seguir mejor cada movimiento.
+Del ingreso del producto a la venta, toda la informaciÃ³n relacionada.
+Cuando el inventario no coincide con la realidad, todas las decisiones pierden precisiÃ³n.
+Productos sin actualizar, compras difÃ­ciles de seguir y movimientos entre depÃ³sitos o sucursales pueden generar diferencias que afectan la disponibilidad, la venta y la lectura de mÃ¡rgenes.
+Una visiÃ³n de lo que entra, cambia de lugar y se vende.
+RETAIL conecta la venta con el producto, la compra, el inventario, el cliente y el resultado. BOUTIQUE se mantiene como soluciÃ³n independiente porque profundiza en variantes, colecciones, alquileres y procesos propios de la moda.
+Alcance de la soluciÃ³n
+CatÃ¡logo, categorÃ­as, cÃ³digos y precios.
+Inventario, depÃ³sitos y sucursales.
+Compras y proveedores.
+Ventas y punto de venta.
+Clientes, reservas y apartados.
+Caja y medios de pago.
+Costos, mÃ¡rgenes e indicadores.
+ConfiguraciÃ³n aplicable a librerÃ­as y otros comercios especializados.
+Diferencia VORDIA
+ConocÃ© quÃ© tenÃ©s, dÃ³nde estÃ¡ y cÃ³mo se mueve.
+Pensado para
+LibrerÃ­as, papelerÃ­as, tiendas de regalos, comercios especializados y cadenas minoristas.
+Cierre comercial
+ConectÃ¡ el inventario con cada decisiÃ³n comercial.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA BOUTIQUE
+GestiÃ³n para moda
+Una prenda no es un solo producto. Cada talle, color y variante cuenta.
+VORDIA BOUTIQUE organiza catÃ¡logo, inventario, clientes, ventas y alquileres en una soluciÃ³n diseÃ±ada para boutiques y negocios de moda.
+AdministrÃ¡ cada variante. ComprendÃ© cada movimiento. PreparÃ¡ tu boutique para nuevos canales.
+En la moda, un mismo producto puede existir en muchas versiones.
+Modelos, talles, colores, fotografÃ­as y disponibilidades cambian constantemente. Cuando esa informaciÃ³n se controla de forma manual, resulta difÃ­cil saber quÃ© fue reservado, vendido, alquilado, cambiado o devuelto.
+Toda la colecciÃ³n dentro de una misma operaciÃ³n.
+BOUTIQUE comprende el lenguaje particular de la moda. La integraciÃ³n digital proyectada busca que catÃ¡logo, fotografÃ­as, precios, variantes y disponibilidad se administren desde un Ãºnico origen. Hasta que esa integraciÃ³n estÃ© desarrollada y validada, debe comunicarse como evoluciÃ³n prevista, no como capacidad disponible.
+Alcance de la soluciÃ³n
+Productos, colecciones y marcas.
+Talles, colores y variantes.
+FotografÃ­as, precios e inventario por variante.
+Reservas y apartados.
+Ventas o alquileres.
+Cambios y devoluciones.
+Clientes e historial.
+Caja, compras, proveedores e indicadores.
+EvoluciÃ³n proyectada hacia tienda online y plataforma de moda sincronizadas.
+Diferencia VORDIA
+Cada variante cuenta. Cada movimiento tambiÃ©n.
+Pensado para
+Boutiques y tiendas de indumentaria, calzado y accesorios, con venta o alquiler.
+Cierre comercial
+GestionÃ¡ tu boutique desde una base preparada para conectar la operaciÃ³n fÃ­sica y digital.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA OPS
+GestiÃ³n de operaciones y logÃ­stica
+Una operaciÃ³n no puede detenerse para buscar informaciÃ³n.
+VORDIA OPS conecta depÃ³sitos, movimientos, pedidos, tareas y documentos para ofrecer una visiÃ³n mÃ¡s clara de lo que ocurre en cada etapa.
+MÃ¡s trazabilidad para operar. MÃ¡s visibilidad para decidir.
+Cuando un movimiento no queda registrado, la operaciÃ³n pierde continuidad.
+Entradas, salidas, transferencias, pedidos y entregas generan informaciÃ³n constantemente. Si cada Ã¡rea registra esos movimientos de manera diferente, conocer el estado real requiere mensajes y verificaciones manuales.
+Saber quÃ© ocurriÃ³, dÃ³nde ocurriÃ³ y quÃ© debe pasar despuÃ©s.
+OPS no muestra solamente cantidades. Relaciona cada movimiento con su origen, ubicaciÃ³n, responsable y estado para conservar la continuidad entre Ã¡reas.
+Alcance de la soluciÃ³n
+Productos, existencias y ubicaciones.
+DepÃ³sitos.
+Entradas, salidas y transferencias.
+Pedidos, preparaciÃ³n y despacho.
+Compras y proveedores.
+Tareas y responsables.
+Documentos, historial y trazabilidad.
+Indicadores operativos.
+Diferencia VORDIA
+Lo que se mueve tambiÃ©n debe poder seguirse.
+Pensado para
+Empresas con depÃ³sitos, distribuciÃ³n, logÃ­stica u operaciones administrativas que requieren trazabilidad.
+Cierre comercial
+ConvertÃ­ cada movimiento en informaciÃ³n que pueda seguirse.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+VORDIA AGRO
+GestiÃ³n para la producciÃ³n agrÃ­cola
+Cada decisiÃ³n en el campo comienza con informaciÃ³n.
+VORDIA AGRO organiza establecimientos, campaÃ±as, inventario, compras, producciÃ³n y finanzas para ofrecer una visiÃ³n relacionada de la actividad agrÃ­cola.
+Del establecimiento al resultado, cada etapa bajo seguimiento.
+La producciÃ³n ocurre en el campo, pero muchas decisiones se toman lejos de Ã©l.
+Parcelas, cultivos, insumos, tareas, maquinaria, compras y ventas generan datos en distintos momentos. Cuando permanecen separados, resulta difÃ­cil conocer el costo y el resultado de cada campaÃ±a.
+Toda la actividad productiva dentro de una misma visiÃ³n.
+AGRO relaciona lo que se hace, lo que se utiliza y lo que se obtiene durante cada ciclo productivo. La informaciÃ³n puede leerse por establecimiento, parcela o campaÃ±a.
+Alcance de la soluciÃ³n
+Establecimientos y parcelas.
+Cultivos y campaÃ±as.
+Actividades y tareas.
+Insumos e inventario.
+Recursos y maquinaria.
+Compras y proveedores.
+ProducciÃ³n y ventas.
+Ingresos, egresos y finanzas.
+Trazabilidad e indicadores.
+Diferencia VORDIA
+ConectÃ¡ cada etapa para comprender el resultado completo.
+Pensado para
+Empresas y responsables de operaciones agrÃ­colas.
+Cierre comercial
+OrganizÃ¡ la informaciÃ³n de cada campaÃ±a para decidir con una visiÃ³n mÃ¡s completa.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+PÃ¡gina de soluciones
+Esta pÃ¡gina ayuda al visitante a reconocer su sector. No debe repetir cada landing completa ni presentar una cuadrÃ­cula indiferenciada de productos.
+EncontrÃ¡ la soluciÃ³n que entiende cÃ³mo funciona tu empresa.
+VORDIA combina una base tecnolÃ³gica comÃºn con soluciones creadas alrededor de procesos concretos. ElegÃ­ tu sector para conocer quÃ© informaciÃ³n, tareas y movimientos puede organizar cada producto.
+Criterio de selecciÃ³n
+Si administrÃ¡s
+SoluciÃ³n
+Necesidad central
+Edificios o condominios
+HABITAT
+Comunidad, cobranzas y mantenimiento
+Hoteles, hostales o alojamientos
+STAY
+OcupaciÃ³n, huÃ©spedes y pagos
+Restaurantes o cafeterÃ­as
+DINE
+Pedidos, inventario, caja y costos
+Comercios o librerÃ­as
+RETAIL
+Productos, inventario, compras y ventas
+Boutiques o tiendas de moda
+BOUTIQUE
+Variantes, colecciones, venta o alquiler
+DepÃ³sitos u operaciones logÃ­sticas
+OPS
+Movimientos, pedidos y trazabilidad
+ProducciÃ³n agrÃ­cola
+AGRO
+CampaÃ±as, recursos, producciÃ³n y finanzas
+
+AcciÃ³n de cierre
+Â¿No sabÃ©s quÃ© soluciÃ³n corresponde a tu empresa? Contanos cÃ³mo funciona tu operaciÃ³n y te ayudamos a identificar el punto de partida.
+AcciÃ³n principal: Hablar con VORDIA.
+
+PÃ¡gina CÃ³mo funciona
+La implementaciÃ³n debe comunicarse como un proceso de comprensiÃ³n y configuraciÃ³n, no como una promesa automÃ¡tica ni idÃ©ntica para todos los clientes.
+La soluciÃ³n comienza antes del sistema.
+Para conectar una empresa, primero es necesario comprender cÃ³mo trabaja. VORDIA parte de los procesos reales, identifica la informaciÃ³n necesaria y define una implementaciÃ³n acorde con el alcance validado.
+1 Comprender
+Relevamos cÃ³mo se administra hoy el negocio, quÃ© Ã¡reas participan, quÃ© informaciÃ³n utilizan y dÃ³nde aparecen las principales fricciones.
+2 Estructurar
+Ordenamos procesos, datos, responsables y prioridades para definir una lÃ³gica de gestiÃ³n comprensible.
+3 Configurar
+Preparamos la soluciÃ³n VORDIA correspondiente y validamos el alcance que formarÃ¡ parte de la implementaciÃ³n.
+4 Implementar
+Incorporamos la soluciÃ³n, organizamos la informaciÃ³n necesaria y acompaÃ±amos la adopciÃ³n por parte de los usuarios.
+5 Evolucionar
+A medida que la operaciÃ³n cambia, se evalÃºan nuevas necesidades, ajustes o integraciones sin confundir mejoras proyectadas con capacidades disponibles.
+Cierre
+Cada implementaciÃ³n tiene un alcance propio. Conversemos para entender el de tu empresa.
+AcciÃ³n principal: Solicitar una demostraciÃ³n.
+
+PÃ¡gina Por quÃ© VORDIA
+La diferencia debe explicarse mediante criterios concretos, no con afirmaciones de superioridad ni liderazgo sin evidencia.
+TecnologÃ­a que empieza por entender la operaciÃ³n.
+VORDIA desarrolla soluciones especializadas para que la informaciÃ³n de una empresa tenga contexto, continuidad y utilidad. El objetivo no es acumular funciones, sino relacionar los movimientos que permiten comprender quÃ© ocurre y quÃ© necesita atenciÃ³n.
+EspecializaciÃ³n por sector
+Un alojamiento, una boutique y un condominio comparten necesidades administrativas, pero no funcionan igual. Cada producto profundiza en los procesos propios de su actividad.
+Una lÃ³gica comÃºn
+Los productos pertenecen a una misma familia tecnolÃ³gica. Esto mantiene coherencia en usuarios, permisos, informaciÃ³n, seguridad y experiencia, sin presentar VORDIA Core como producto comercial.
+InformaciÃ³n relacionada
+Un pago, una venta o una tarea adquiere valor cuando puede vincularse con su origen, su responsable y su efecto. VORDIA busca conservar esas relaciones.
+Claridad para decidir
+La informaciÃ³n relevante debe poder encontrarse y comprenderse sin depender de mÃºltiples planillas, conversaciones o personas.
+EvoluciÃ³n responsable
+Las nuevas funciones e integraciones se comunican Ãºnicamente cuando su alcance y disponibilidad han sido validados.
+DeclaraciÃ³n
+No desarrollamos funciones aisladas. DiseÃ±amos operaciones conectadas.
+
+PÃ¡gina Empresa
+Esta pÃ¡gina debe construir confianza sin inventar antigÃ¼edad, tamaÃ±o, clientes, cifras, certificaciones o liderazgo de mercado.
+Construimos tecnologÃ­a para entender mejor cÃ³mo funciona una empresa.
+VORDIA nace de una observaciÃ³n concreta: muchas empresas tienen herramientas, informaciÃ³n y personas capaces, pero aun asÃ­ deben trabajar con procesos desconectados y datos difÃ­ciles de reunir.
+Nuestro propÃ³sito es desarrollar soluciones de gestiÃ³n que conviertan esa complejidad en una estructura mÃ¡s clara. Cada producto se especializa en un sector, mientras toda la familia comparte una misma visiÃ³n: relacionar la informaciÃ³n necesaria para operar y decidir.
+QuÃ© construimos
+Un ecosistema de plataformas B2B para edificios y condominios, alojamientos, gastronomÃ­a, comercios, moda, operaciones logÃ­sticas y producciÃ³n agrÃ­cola.
+CÃ³mo pensamos
+La tecnologÃ­a debe comprender el negocio antes de intentar transformarlo. Por eso partimos de procesos reales, reducimos fricciones y priorizamos informaciÃ³n que tenga utilidad concreta para el usuario.
+QuÃ© buscamos
+Crear una familia de productos coherente, especializada y preparada para evolucionar junto con las necesidades de cada operaciÃ³n.
+VisiÃ³n
+Que empresas de distintos sectores puedan comprender y coordinar mejor su actividad desde soluciones diseÃ±adas para su realidad.
+Cierre
+Muchas empresas. Diferentes realidades. Una misma necesidad de claridad.
+
+PÃ¡gina de demostraciÃ³n
+El formulario debe facilitar una conversaciÃ³n comercial y obtener solamente la informaciÃ³n necesaria para preparar el primer contacto.
+Veamos cÃ³mo funciona hoy tu empresa.
+Contanos quÃ© administrÃ¡s y quÃ© parte de la operaciÃ³n necesita mayor visibilidad, seguimiento o coordinaciÃ³n. AsÃ­ podremos orientar la conversaciÃ³n hacia la soluciÃ³n adecuada.
+Campos
+Nombre y apellido.
+Empresa.
+Correo electrÃ³nico.
+TelÃ©fono o WhatsApp.
+Sector o soluciÃ³n de interÃ©s.
+Cantidad de sedes o unidades, cuando corresponda.
+Principal necesidad o dificultad actual.
+Preferencia de contacto.
+BotÃ³n: Solicitar una demostraciÃ³n.
+ConfirmaciÃ³n: Recibimos tu solicitud. Revisaremos la informaciÃ³n para orientar mejor la primera conversaciÃ³n.
+Principios del formulario
+No pedir informaciÃ³n financiera sensible.
+No exigir demasiados campos antes del primer contacto.
+Explicar el uso de los datos y enlazar la polÃ­tica de privacidad.
+No prometer tiempos de respuesta hasta que exista un compromiso operativo validado.
+
+PÃ¡gina de contacto
+Hablemos de tu empresa.
+Si querÃ©s conocer una soluciÃ³n, conversar sobre una implementaciÃ³n o realizar una consulta institucional, escribinos por el canal correspondiente.
+Consulta comercial
+Para empresas interesadas en conocer los productos o solicitar una demostraciÃ³n.
+AcciÃ³n: Solicitar una demostraciÃ³n.
+Consulta institucional
+Para alianzas, proveedores, prensa u otras conversaciones relacionadas con VORDIA.
+AcciÃ³n: Enviar una consulta.
+Soporte
+El soporte para clientes deberÃ¡ utilizar un canal diferenciado cuando ese servicio estÃ© habilitado. No conviene mezclar solicitudes comerciales con incidencias operativas.
+Datos pendientes antes de publicar
+Correo comercial oficial.
+NÃºmero de WhatsApp empresarial.
+DirecciÃ³n, Ãºnicamente si corresponde publicarla.
+Horarios de atenciÃ³n, Ãºnicamente cuando estÃ©n definidos.
+Enlaces oficiales de redes sociales.
+
+Sistema de llamados a la acciÃ³n
+El sitio debe utilizar pocas acciones, con significados consistentes. Cambiar el nombre del botÃ³n en cada secciÃ³n reduce claridad.
+AcciÃ³n
+Uso
+Destino
+Solicitar una demostraciÃ³n
+ConversiÃ³n principal
+Formulario comercial
+EncontrÃ¡ tu soluciÃ³n
+Apertura de Inicio
+PÃ¡gina Soluciones
+Conocer VORDIA producto
+Tarjetas y pÃ¡ginas relacionadas
+Landing del producto
+Hablar con VORDIA
+Cuando el sector no estÃ¡ claro
+Contacto comercial
+Acceder
+Usuarios existentes
+Entorno de autenticaciÃ³n
+
+Frases que deben evitarse
+La mejor plataforma del mercado.
+La soluciÃ³n nÃºmero uno.
+Resultados garantizados.
+ImplementaciÃ³n inmediata.
+IntegraciÃ³n con todo.
+Inteligencia artificial, automatizaciÃ³n o tiempo real cuando no estÃ©n validados.
+Criterio verbal
+La marca debe sonar segura, precisa y comprensible. Puede utilizar frases breves y memorables, pero siempre acompaÃ±adas por una explicaciÃ³n concreta. Se priorizan verbos como conectar, organizar, relacionar, comprender, seguir y decidir. Se evita repetir control u operaciÃ³n en todos los tÃ­tulos.
+
+Contenido del pie de pÃ¡gina
+NavegaciÃ³n
+Soluciones.
+CÃ³mo funciona.
+Por quÃ© VORDIA.
+Empresa.
+Solicitar una demostraciÃ³n.
+Contacto.
+Productos
+HABITAT Â· STAY Â· DINE Â· RETAIL Â· BOUTIQUE Â· OPS Â· AGRO
+InformaciÃ³n legal
+PolÃ­tica de privacidad.
+TÃ©rminos y condiciones.
+Preferencias de cookies, si corresponde.
+Cierre institucional
+VORDIA. TecnologÃ­a para empresas que necesitan ver y coordinar mejor su actividad.
+
+Reglas antes de diseÃ±ar y publicar
+Estas reglas protegen la claridad comercial y evitan que la web prometa mÃ¡s de lo que el producto puede demostrar.
+1. Validar el estado comercial de cada producto antes de activar su enlace.
+2. Marcar como PrÃ³ximamente o retirar las pÃ¡ginas que aÃºn no tengan alcance aprobado.
+3. Confirmar cada funciÃ³n con el responsable de producto.
+4. Separar capacidades disponibles, en desarrollo y proyectadas.
+5. Usar pantallas reales solamente cuando representen la versiÃ³n actual.
+6. No publicar clientes, cifras, testimonios, resultados o integraciones sin autorizaciÃ³n y evidencia.
+7. Mantener HQ fuera del catÃ¡logo pÃºblico.
+8. Mantener Sistema Shalom fuera de la web hasta decidir si serÃ¡ producto o configuraciÃ³n.
+9. Presentar LibrerÃ­as dentro de RETAIL mientras no exista una decisiÃ³n de arquitectura diferente.
+10. Usar exclusivamente los logotipos oficiales de cada producto, sin redibujarlos ni alterar proporciones, colores o composiciÃ³n.
+Criterio de aprobaciÃ³n del contenido
+Un visitante entiende quÃ© es VORDIA en pocos segundos.
+Cada producto se diferencia por su problema y su lenguaje.
+La navegaciÃ³n conduce a una acciÃ³n comercial clara.
+La redacciÃ³n no depende de afirmaciones sin prueba.
+El contenido puede transformarse en una experiencia visual propia sin perder comprensiÃ³n.
+ConclusiÃ³n
+La web de VORDIA debe diferenciarse por la forma en que convierte operaciones complejas en una historia comprensible. La creatividad visual podrÃ¡ romper el patrÃ³n habitual de las pÃ¡ginas tecnolÃ³gicas, pero la arquitectura del mensaje permanecerÃ¡ clara: reconocer el problema, comprender la soluciÃ³n, encontrar el producto adecuado y comenzar una conversaciÃ³n.

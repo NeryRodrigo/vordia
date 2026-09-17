@@ -1,0 +1,863 @@
+
+===== PAGE 1 =====
+VORDIA HQ
+DOCUMENTO FUNCIONAL MAESTRO
+Hoja de ruta administrativa, financiera y operativa
+Versión 1.0  •  25 de agosto de 2026
+Documento de trabajo para dirección y desarrollo
+===== PAGE 2 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 2
+OBJETIVO
+Construir el sistema interno de administración y dirección de VORDIA.
+VORDIA HQ deberá centralizar la información empresarial y transformar datos operativos en información que permita:
+ Administrar.
+ Automatizar.
+ Supervisar.
+ Proyectar.
+ Detectar problemas.
+ Tomar decisiones.
+VORDIA HQ será la fuente única de verdad empresarial de VORDIA.
+LECTURA DEL DOCUMENTO
+P0 - Crítico P1 - Importante P2 - Evolución
+Base mínima para operar Segunda etapa de escala Capacidades avanzadas
+1. PRINCIPIOS DEL DESARROLLO
+1.1 Automation First
+Todo proceso repetitivo susceptible de automatización debe diseñarse para funcionar sin intervención humana.
+1.2 Exception Management
+La dirección no debe revisar todo.
+ Está atrasado.
+ Está vencido.
+ Se desvió.
+ Requiere aprobación.
+ Requiere decisión.
+ Representa un riesgo.
+1.3 Single Source of Truth
+No duplicar información innecesariamente.
+Cliente, producto, contrato, pago, tarea y proyecto deben relacionarse entre sí.
+1.4 Trazabilidad
+Los movimientos importantes deberán registrar:
+ Usuario.
+ Acción.
+ Fecha.
+ Hora.
+ Valor anterior.
+ Valor nuevo.
+1.5 Modularidad
+Construir módulos independientes pero relacionados.
+1.6 Escalabilidad
+No programar reglas específicas únicamente para los primeros clientes.
+===== PAGE 3 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 3
+2. MENÚ PRINCIPAL - V1
+Módulo Función
+01 - INICIO Centro ejecutivo de VORDIA.
+02 - CRM Prospectos y negociaciones.
+03 - CLIENTES Relación integral con clientes.
+04 - PRODUCTOS Portafolio de productos VORDIA.
+05 - PROYECTOS Desarrollo e implementaciones.
+06 - TAREAS Trabajo operativo.
+07 - FINANZAS Administración financiera.
+08 - CONTRATOS Contratos con clientes y proveedores.
+09 - PROVEEDORES Proveedores y servicios.
+10 - DOCUMENTOS Repositorio empresarial.
+11 - AUTOMATIZACIONES Reglas automáticas.
+12 - ROADMAP Objetivos estratégicos.
+13 - REPORTES Business Intelligence.
+14 - CONFIGURACIÓN Usuarios, permisos y parámetros.
+Submenús de Finanzas
+ Resumen.
+ Ingresos.
+ Cuentas por cobrar.
+ Gastos.
+ Cuentas por pagar.
+ Flujo de caja.
+ Proyecciones.
+3. INICIO - CENTRO EJECUTIVO
+La pantalla principal debe responder rápidamente:
+FINANZAS
+ Ingreso facturado del mes.
+ Ingreso cobrado del mes.
+ Gastos pagados.
+ Resultado del período.
+ Cuentas por cobrar.
+ Cuentas vencidas.
+ Cuentas por pagar.
+ Caja/bancos disponibles.
+ Flujo proyectado 30 días.
+CLIENTES
+ Clientes activos.
+ Clientes nuevos.
+ Clientes con deuda.
+ Clientes que requieren atención.
+ Contratos próximos a vencer.
+PRODUCTOS
+ Productos operativos.
+ Productos en desarrollo.
+===== PAGE 4 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 4
+ Productos en testing.
+ Productos planificados.
+ Productos pausados.
+ Producto de mayor facturación.
+ Producto de mayor rentabilidad.
+COMERCIAL
+ Oportunidades abiertas.
+ Valor total del pipeline.
+ Valor ponderado.
+ Propuestas pendientes.
+ Cierres esperados.
+ Negociaciones sin seguimiento.
+OPERACIONES
+ Proyectos activos.
+ Implementaciones activas.
+ Tareas pendientes.
+ Tareas vencidas.
+ Tareas críticas.
+4. CENTRO DE ALERTAS
+Debe existir un componente permanente de:
+REQUIERE ATENCIÓN
+Nivel Ejemplo
+CRÍTICO Factura vencida.
+CRÍTICO Pago importante próximo.
+CRÍTICO Proyecto atrasado.
+CRÍTICO Tarea crítica vencida.
+ALERTA Contrato próximo a vencer.
+ALERTA Negociación sin movimiento.
+ALERTA Cliente sin próxima acción.
+ALERTA Producto con retraso.
+ATENCIÓN Gasto superior al presupuesto.
+ATENCIÓN Caída de ingresos.
+Cada alerta deberá permitir ingresar directamente al registro relacionado.
+5. CRM COMERCIAL
+Pipeline
+1. Prospecto.
+2. Contactado.
+3. Reunión.
+4. Relevamiento.
+5. Propuesta.
+6. Negociación.
+7. Contrato.
+8. Ganado.
+9. Perdido.
+===== PAGE 5 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 5
+Oportunidad
+Campos:
+ Empresa.
+ Contacto.
+ Producto interesado.
+ Responsable.
+ Valor inicial.
+ Fee inicial.
+ Ingreso mensual esperado.
+ Ingreso anual esperado.
+ Probabilidad.
+ Fecha estimada cierre.
+ Origen.
+ Estado.
+ Última interacción.
+ Próxima acción.
+ Fecha próxima acción.
+ Observaciones.
+Regla crítica
+Una oportunidad activa debe tener: responsable + próxima acción.
+6. CLIENTES
+Listado
+Columnas:
+ Cliente.
+ Productos.
+ Responsable.
+ Estado.
+ Facturación mensual.
+ Saldo pendiente.
+ Próximo vencimiento.
+ Próxima acción.
+Estados
+ Implementación.
+ Activo.
+ Activo con deuda.
+ En riesgo.
+ Suspendido.
+ Finalizado.
+7. FICHA 360° DEL CLIENTE
+Resumen
+ Nombre.
+ Razón social.
+ RUC.
+ Teléfono.
+ Email.
+ Contactos.
+ Responsable VORDIA.
+ Estado.
+===== PAGE 6 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 6
+Productos
+ Productos contratados.
+Finanzas
+ Fee inicial.
+ Mensualidad.
+ Anualidad.
+ Facturado.
+ Cobrado.
+ Pendiente.
+ Próximo vencimiento.
+ Estado financiero.
+Contratos
+ Contratos vigentes e históricos.
+Proyectos
+ Implementaciones relacionadas.
+Tareas
+ Pendientes y completadas.
+Documentos
+ Archivos del cliente.
+Actividad
+ Timeline cronológico.
+Próxima acción
+Debe mostrarse prominentemente.
+8. PRODUCTOS
+Estados:
+ Idea
+ Análisis
+ Planificado
+ Desarrollo
+ Testing
+ Piloto
+ Operativo
+ Mejora continua
+ Pausado
+ Retirado
+9. FICHA DEL PRODUCTO
+Debe mostrar:
+ Nombre.
+ Descripción.
+ Responsable.
+ Estado.
+ Prioridad.
+===== PAGE 7 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 7
+ Fecha inicio.
+ Fecha objetivo.
+ Porcentaje de avance.
+ Próximo hito.
+ Clientes.
+ Facturación.
+ Costos.
+ Margen.
+ Proyectos.
+ Tareas.
+ Errores.
+ Mejoras.
+ Roadmap.
+10. RENTABILIDAD POR PRODUCTO
+Ingresos asignados al producto - Costos directamente asignados = Margen de contribución del producto
+Mostrar:
+ Ingreso mensual.
+ Ingreso acumulado.
+ Costos.
+ Resultado.
+ Margen %.
+ Clientes.
+ Ingreso promedio por cliente.
+11. PROYECTOS
+Desarrollo
+Construcción de productos.
+Implementación
+Puesta en funcionamiento para un cliente.
+Interno
+Proyecto empresarial.
+Campos:
+ Nombre.
+ Tipo.
+ Producto.
+ Cliente.
+ Responsable.
+ Inicio.
+ Fecha objetivo.
+ Estado.
+ Prioridad.
+ Avance.
+ Próximo hito.
+12. TAREAS
+Toda actividad ejecutable deberá poder terminar en este módulo.
+Campos:
+===== PAGE 8 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 8
+ Título.
+ Descripción.
+ Responsable.
+ Estado.
+ Prioridad.
+ Fecha creación.
+ Fecha límite.
+ Cliente.
+ Producto.
+ Proyecto.
+ Origen.
+ Dependencia.
+ Observaciones.
+Estados
+ Pendiente.
+ En proceso.
+ Bloqueada.
+ Revisión.
+ Completada.
+ Cancelada.
+Prioridades
+ P0 Crítica
+ P1 Alta
+ P2 Media
+ P3 Baja
+13. MI TRABAJO
+Cada usuario deberá poder abrir una vista:
+HOY
+ Mis tareas de hoy.
+ Tareas vencidas.
+ Próximas tareas.
+ Clientes que requieren acción.
+ Negociaciones que requieren seguimiento.
+ Alertas asignadas.
+Objetivo: que cada colaborador sepa qué debe hacer sin tener que preguntarle constantemente a dirección.
+14. FINANZAS - PRINCIPIO FUNDAMENTAL
+Concepto Definición
+FACTURADO Derecho generado a cobrar.
+COBRADO Dinero efectivamente recibido.
+POR COBRAR Facturas o compromisos todavía pendientes.
+GASTO REGISTRADO Costo reconocido.
+PAGADO Dinero efectivamente desembolsado.
+POR PAGAR Obligación pendiente.
+15. INGRESOS
+Campos:
+===== PAGE 9 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 9
+ Fecha.
+ Cliente.
+ Producto.
+ Contrato.
+ Concepto.
+ Categoría.
+ Monto.
+ Medio de cobro.
+ Cuenta destino.
+ Documento relacionado.
+ Estado.
+ Observaciones.
+16. CUENTAS POR COBRAR
+Campos:
+ Cliente.
+ Producto.
+ Concepto.
+ Documento.
+ Fecha emisión.
+ Fecha vencimiento.
+ Monto.
+ Pagado.
+ Saldo.
+ Días vencidos.
+ Estado.
+Estados
+ Pendiente.
+ Parcial.
+ Pagado.
+ Vencido.
+ Anulado.
+17. AGING DE COBRANZAS
+Clasificar automáticamente:
+ Por vencer
+ 1-30 días
+ 31-60 días
+ 61-90 días
+ Más de 90 días
+Dirección debe poder conocer inmediatamente cuánto dinero se encuentra en cada categoría.
+18. GASTOS
+Campos:
+ Fecha.
+ Proveedor.
+ Categoría.
+ Producto relacionado.
+ Proyecto relacionado.
+ Concepto.
+ Monto.
+ Forma de pago.
+===== PAGE 10 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 10
+ Cuenta.
+ Recurrente sí/no.
+ Comprobante.
+ Observaciones.
+19. CUENTAS POR PAGAR
+Campos:
+ Proveedor.
+ Concepto.
+ Categoría.
+ Producto.
+ Proyecto.
+ Fecha emisión.
+ Fecha vencimiento.
+ Monto.
+ Estado.
+ Cuenta prevista.
+ Comprobante.
+Estados
+ Pendiente.
+ Programado.
+ Pagado.
+ Vencido.
+ Cancelado.
+20. CATEGORÍAS FINANCIERAS
+Tecnología
+ Hosting.
+ Servidores.
+ Dominios.
+ APIs.
+ Licencias.
+ Desarrollo.
+Personal
+ Salarios.
+ Honorarios.
+ Freelancers.
+Comercial
+ Marketing.
+ Publicidad.
+ Comisiones.
+Administración
+ Contabilidad.
+ Legal.
+ Bancos.
+ Software interno.
+===== PAGE 11 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 11
+Impuestos
+ Categoría separada.
+El administrador podrá agregar categorías.
+21. CENTROS DE COSTO
+Todo gasto relevante podrá asociarse a VORDIA General o a un producto específico.
+Ejemplo:
+ VORDIA General.
+ VORDIA Condominios.
+ VORDIA Hostel.
+ VORDIA HQ.
+Esto permitirá posteriormente determinar rentabilidad real.
+22. CUENTAS FINANCIERAS
+Registrar:
+ Banco.
+ Cuenta corriente.
+ Caja.
+ Otras cuentas.
+Cada movimiento deberá identificar desde o hacia qué cuenta ocurrió.
+23. FLUJO DE CAJA
+Saldo inicial + Cobros - Pagos = Saldo final
+Separando flujo:
+ Real.
+ Programado.
+ Proyectado.
+Visualización:
+ 7 días.
+ 30 días.
+ 90 días.
+ 12 meses.
+24. PROYECCIÓN FINANCIERA
+Ingresos futuros provenientes de
+ Contratos.
+ Suscripciones.
+ Cuentas por cobrar.
+ Negociaciones comerciales ponderadas.
+Egresos futuros provenientes de
+ Gastos recurrentes.
+ Cuentas por pagar.
+ Contratos.
+ Compromisos.
+===== PAGE 12 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 12
+Escenario conservador
+Solo ingresos altamente confirmados.
+Escenario esperado
+Ingresos probables.
+Escenario optimista
+Incluye oportunidades comerciales.
+25. ESTADO DE RESULTADOS GERENCIAL
+Ingresos - Costos directos = Margen bruto - Gastos operativos = Resultado operativo
+El objetivo inicial es gestión empresarial, no reemplazar automáticamente toda la contabilidad legal/fiscal.
+26. CONTRATOS
+Registrar:
+ Tipo.
+ Cliente/proveedor.
+ Producto.
+ Inicio.
+ Vencimiento.
+ Renovación.
+ Valor.
+ Periodicidad.
+ Archivo.
+ Estado.
+Generar alertas:
+ 90 días.
+ 60 días.
+ 30 días.
+ 15 días.
+ 7 días.
+Los tiempos serán configurables.
+27. COBROS RECURRENTES
+Cada cliente podrá definir:
+ Concepto.
+ Producto.
+ Monto.
+ Periodicidad.
+ Día de cobro.
+ Fecha inicio.
+ Fecha fin.
+ Renovación.
+El sistema generará automáticamente la cuenta por cobrar correspondiente.
+28. AUTOMATIZACIONES - MVP
+Regla Acción
+Regla 01 7 días antes del vencimiento: crear aviso.
+Regla 02 Día del vencimiento: crear alerta.
+===== PAGE 13 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 13
+Regla Acción
+Regla 03 Factura vencida: cambiar estado automáticamente.
+Regla 04 X días vencida: notificar administración.
+Regla 05 Contrato próximo a vencer: generar alerta.
+Regla 06 Negociación sin actividad durante X días: alertar responsable.
+Regla 07 Tarea vencida: alertar responsable.
+Regla 08 Tarea crítica vencida: escalar al supervisor.
+Regla 09 Producto sin actualización durante X días: alertar responsable.
+Regla 10 Cliente activo sin próxima acción cuando sea requerida: alertar 
+responsable.
+29. MOTOR DE AUTOMATIZACIONES - ARQUITECTURA
+TRIGGER → CONDITIONS → ACTION
+Ejemplo
+ TRIGGER: Factura vencida.
+ CONDITION: Saldo > 0.
+ ACTION: Cambiar estado + enviar aviso + generar tarea.
+No programar cada futura automatización rígidamente si puede implementarse posteriormente mediante reglas configurables.
+30. ROADMAP VORDIA
+Campos:
+ Objetivo.
+ Categoría.
+ Responsable.
+ Inicio.
+ Fecha meta.
+ Estado.
+ Prioridad.
+ Avance.
+ Indicador.
+ Proyectos relacionados.
+Estados
+ Planificado.
+ En curso.
+ En riesgo.
+ Logrado.
+ Cancelado.
+31. KPIs DIRECTIVOS - V1
+Finanzas
+ Ingresos cobrados.
+ Facturación.
+ Gastos.
+ Resultado.
+ Margen.
+ Cuentas por cobrar.
+===== PAGE 14 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 14
+ Cuentas vencidas.
+ Cuentas por pagar.
+ Burn mensual.
+ Flujo de caja.
+Comercial
+ Leads.
+ Oportunidades.
+ Pipeline.
+ Pipeline ponderado.
+ Conversión.
+ Ticket promedio.
+Clientes
+ Clientes activos.
+ Nuevos clientes.
+ Clientes con deuda.
+ Ingreso promedio por cliente.
+Productos
+ Productos activos.
+ Productos en desarrollo.
+ Facturación por producto.
+ Rentabilidad por producto.
+Operaciones
+ Tareas completadas.
+ Tareas vencidas.
+ Proyectos atrasados.
+ Implementaciones activas.
+32. INDICADORES DE TENDENCIA
+No mostrar solamente: “Ingresos Gs. 10.000.000”.
+Gs. 10.000.000   ↑ 18% vs. período anterior
+Esto aplica a los principales KPIs.
+33. DECISION CENTER
+Crear una sección futura/próxima denominada:
+DECISION CENTER
+No almacena información nueva. Analiza la existente y muestra excepciones.
+Finanzas
+“Los gastos están creciendo más rápido que los ingresos.”
+Producto
+“Hostel representa X% de los costos de desarrollo y todavía no genera ingresos.”
+Comercial
+“El pipeline del próximo mes está por debajo del objetivo.”
+===== PAGE 15 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 15
+Clientes
+“X cliente representa más del X% de los ingresos.”
+Operaciones
+“Existen demasiadas tareas P0/P1 atrasadas.”
+34. AUDIT LOG
+Registrar acciones importantes:
+ Creación.
+ Modificación.
+ Eliminación.
+ Cobro.
+ Pago.
+ Cambio de estado.
+ Cambio contractual.
+ Cambio financiero.
+Guardar:
+ Usuario.
+ Fecha/hora.
+ Acción.
+ Registro.
+ Valor anterior.
+ Valor nuevo.
+35. USUARIOS Y PERMISOS
+Rol Acceso inicial
+Dirección Acceso total.
+Administración Clientes + finanzas + contratos.
+Comercial CRM + clientes.
+Operaciones Productos + proyectos + tareas.
+Finanzas Finanzas + reportes.
+Los permisos deberán gestionarse individualmente en el futuro.
+36. DOCUMENTOS
+Adjuntar documentos a:
+ Cliente.
+ Producto.
+ Contrato.
+ Proyecto.
+ Gasto.
+ Pago.
+ Proveedor.
+Tipos:
+ Contrato.
+ Factura.
+ Recibo.
+ Presupuesto.
+ Comprobante.
+ Documento empresarial.
+ Otro.
+===== PAGE 16 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 16
+37. INTEGRACIONES FUTURAS
+La arquitectura deberá permitir integración posteriormente con:
+ Email.
+ WhatsApp.
+ Pasarela de pagos.
+ Bancos.
+ Calendarios.
+ Facturación electrónica.
+ APIs externas.
+ Inteligencia artificial.
+En Paraguay debe dejarse preparada una capa de integración fiscal independiente para una futura conexión adecuada con el 
+ecosistema de facturación electrónica vigente.
+38. ENTIDADES PRINCIPALES DE BASE DE DATOS
+Entidad Entidad
+User Role
+Client Contact
+Lead Opportunity
+Product ProductVersion
+Contract Subscription
+Invoice / Receivable Payment
+Vendor Bill / Payable
+Expense FinancialAccount
+FinancialCategory CostCenter
+Project Milestone
+Task AutomationRule
+Alert Document
+Activity MessageLog
+KPI RoadmapItem
+AuditLog
+39. RELACIONES FUNDAMENTALES
+Origen Relación
+CLIENTE → PRODUCTOS
+CLIENTE → CONTRATOS
+CLIENTE → FACTURAS
+CLIENTE → PAGOS
+CLIENTE → PROYECTOS
+CLIENTE → TAREAS
+CLIENTE → ACTIVIDADES
+PRODUCTO → CLIENTES
+PRODUCTO → PROYECTOS
+PRODUCTO → INGRESOS
+PRODUCTO → COSTOS
+PRODUCTO → ROADMAP
+PROYECTO → TAREAS
+===== PAGE 17 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 17
+Origen Relación
+CONTRATO → COBROS
+PROVEEDOR → GASTOS
+PROVEEDOR → CUENTAS POR PAGAR
+40. REGLA DE DISEÑO CRÍTICA
+No borrar físicamente registros financieros relevantes.
+Utilizar:
+ Anulación.
+ Archivado.
+ Estados.
+ Historial.
+Mantener trazabilidad.
+41. MVP - PRIORIDAD P0
+El primer producto funcional NO necesita contener todo este documento. Primera versión obligatoria:
+ P0.1  Usuarios.
+ P0.2  Clientes.
+ P0.3  Productos.
+ P0.4  CRM.
+ P0.5  Proyectos.
+ P0.6  Tareas.
+ P0.7  Ingresos.
+ P0.8  Cuentas por cobrar.
+ P0.9  Gastos.
+ P0.10  Cuentas por pagar.
+ P0.11  Contratos.
+ P0.12  Dashboard ejecutivo.
+ P0.13  Alertas.
+ P0.14  Audit Log básico.
+42. SEGUNDA ETAPA - P1
+ Automatizaciones avanzadas.
+ Comunicaciones.
+ Cobros automáticos.
+ Proveedores avanzados.
+ Presupuestos.
+ Flujo proyectado avanzado.
+ Reportes.
+ Costos por producto.
+ Rentabilidad.
+ Roadmap.
+ Control presupuestario.
+43. TERCERA ETAPA - P2
+ Integraciones bancarias.
+ Integración fiscal.
+ Pasarela de pagos.
+ Business Intelligence avanzado.
+ Decision Center.
+===== PAGE 18 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 18
+ IA.
+ Predicciones.
+ Forecast inteligente.
+44. LO QUE NO DESARROLLAR AHORA
+No iniciar todavía:
+ RR.HH. completo.
+ Liquidación salarial compleja.
+ Control biométrico.
+ ERP contable completo.
+ Inventario genérico.
+ Compras empresariales complejas.
+ IA generativa extensa.
+ Aplicación móvil.
+ White label.
+ Multiempresa para clientes externos.
+No son prioridad para el objetivo actual.
+45. PRIMER SPRINT PARA COMENZAR HOY
+Base técnica
+ Crear estructura general.
+ Crear autenticación.
+ Crear usuarios.
+ Crear roles.
+ Crear Audit Log básico.
+Maestro de clientes
+ CRUD clientes.
+ Contactos.
+ Estado.
+ Responsable.
+ Actividad.
+ Próxima acción.
+Maestro de productos
+ CRUD productos.
+ Estado.
+ Prioridad.
+ Responsable.
+ Próximo hito.
+Tareas
+ CRUD tareas.
+ Responsables.
+ Prioridades.
+ Fechas.
+ Relación cliente/producto/proyecto.
+Finanzas básicas
+ CRUD ingresos.
+ CRUD gastos.
+ Categorías.
+ Cuentas financieras.
+===== PAGE 19 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 19
+ Cliente/producto relacionado.
+46. SEGUNDO SPRINT
+ Cuentas por cobrar.
+ Cuentas por pagar.
+ Contratos.
+ Cobros recurrentes.
+ Alertas.
+ Dashboard financiero.
+47. TERCER SPRINT
+ CRM.
+ Pipeline.
+ Proyectos.
+ Implementaciones.
+ Dashboard general.
+ KPIs.
+48. CRITERIO PARA CONSIDERAR EL MVP EXITOSO
+Desde una única plataforma, dirección debe poder responder sin utilizar una planilla externa:
+ ¿Cuánto dinero ingresó este mes?
+ ¿Cuánto gastamos?
+ ¿Cuánto nos deben?
+ ¿Cuánto debemos?
+ ¿Qué pagos vencen?
+ ¿Qué clientes tenemos?
+ ¿Cuánto nos genera cada cliente?
+ ¿Qué productos tenemos?
+ ¿Cuáles estamos desarrollando?
+ ¿Qué producto genera más?
+ ¿Qué proyectos están abiertos?
+ ¿Qué tareas están pendientes?
+ ¿Qué está atrasado?
+ ¿Qué debe hacer cada responsable?
+ ¿Qué requiere atención de dirección?
+Si VORDIA HQ responde correctamente estas preguntas, la primera base administrativa estará cumpliendo su misión.
+49. VISIÓN DE LARGO PLAZO
+VORDIA no debe crecer aumentando indefinidamente la cantidad de controles manuales.
+PROCESOS → RESPONSABLES → SISTEMAS → AUTOMATIZACIONES → INDICADORES → EXCEPCIONES → 
+DECISIONES
+La dirección debe ir abandonando progresivamente el trabajo operativo repetitivo y concentrarse en:
+ Estrategia.
+ Capital.
+ Ventas importantes.
+ Producto.
+ Alianzas.
+ Expansión.
+ Decisiones.
+La meta final de VORDIA HQ es ayudar a construir una empresa capaz de operar ordenadamente incluso cuando sus 
+propietarios no estén interviniendo constantemente.
+===== PAGE 20 =====
+VORDIA HQ  |  DOCUMENTO FUNCIONAL MAESTRO - V1.0
+Página 20
+VORDIA HQ
+De administrar tareas a dirigir una empresa.

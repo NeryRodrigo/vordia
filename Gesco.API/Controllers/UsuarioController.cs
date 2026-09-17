@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Gesco.Application.DTOs;
 using Gesco.Application.Interfaces;
 using Gesco.Application.Services;

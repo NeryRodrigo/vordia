@@ -19,6 +19,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Server=db;Database=GESCO_DB;User Id=sa;Password=Nrcm.2024*;TrustServerCertificate=True;
+      # Credenciales de correo: se definen en el archivo .env de cada servidor (ver .env.example)
+      - EmailSettings__SenderEmail=${EMAIL_SENDER:-}
+      - EmailSettings__AppPassword=${EMAIL_APP_PASSWORD:-}
     depends_on:
       - db
     ports:

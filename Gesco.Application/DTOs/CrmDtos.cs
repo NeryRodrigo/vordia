@@ -24,6 +24,9 @@ namespace Gesco.Application.DTOs
         public DateTime? FechaEstimadaCierre { get; set; }
         public decimal? FeeEstimadoMensual { get; set; }
         public string? Notas { get; set; }
+        public string? Origen { get; set; }
+        public string? OrigenDetalle { get; set; }
+        public string? MensajeInicial { get; set; }
         public bool Activo { get; set; } = true;
         public DateTime FechaCreacion { get; set; }
         public DateTime? FechaActualizacion { get; set; }
@@ -55,9 +58,42 @@ namespace Gesco.Application.DTOs
         public DateTime? FechaEstimadaCierre { get; set; }
         public decimal? FeeEstimadoMensual { get; set; }
         public string? Notas { get; set; }
+        public string? Origen { get; set; }
+        public string? OrigenDetalle { get; set; }
+        public string? MensajeInicial { get; set; }
         public int? UsuarioResponsableId { get; set; }
         public int? UsuarioId { get; set; }
         public string? UsuarioNombre { get; set; }
+    }
+
+    /// <summary>Solicitud del formulario público de vordia.com.py — endpoint anónimo.</summary>
+    public class CrmLeadWebRequest
+    {
+        [Required]
+        [StringLength(150)]
+        public string Nombre { get; set; } = string.Empty;
+
+        [Required]
+        [StringLength(200)]
+        public string Empresa { get; set; } = string.Empty;
+
+        [Required]
+        [EmailAddress]
+        [StringLength(150)]
+        public string Email { get; set; } = string.Empty;
+
+        [StringLength(50)]
+        public string? Telefono { get; set; }
+
+        /// <summary>Código de solución elegido: HQ, HABITAT, STAY, DINE, RETAIL, AGRO o "hablar".</summary>
+        [StringLength(120)]
+        public string? Sector { get; set; }
+
+        [StringLength(2000)]
+        public string? Necesidad { get; set; }
+
+        /// <summary>Campo trampa: los bots lo completan, las personas no lo ven.</summary>
+        public string? Sitio { get; set; }
     }
 
     public class CrmCambiarEstadoRequest

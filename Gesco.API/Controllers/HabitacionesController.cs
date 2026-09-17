@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Gesco.Application.Interfaces;
 using Gesco.Domain.Entities;
 using System.Collections.Generic;

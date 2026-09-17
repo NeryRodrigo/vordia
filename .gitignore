@@ -367,3 +367,12 @@ _ande_diag2/
 
 # Credenciales locales (no subir al repo / servidor ajeno)
 Gesco.API/appsettings.Development.json
+
+# Variables por servidor que consume docker-compose (ver .env.example)
+.env
+
+# Ajustes propios de cada servidor: docker-compose lo suma solo al principal
+docker-compose.override.yml
+
+# Datos persistentes de Nginx Proxy Manager: certificados y config del servidor
+data/

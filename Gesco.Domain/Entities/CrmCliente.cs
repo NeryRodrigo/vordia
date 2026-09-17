@@ -63,6 +63,16 @@ namespace Gesco.Domain.Entities
 
         public string? Notas { get; set; }
 
+        /// <summary>web | manual | whatsapp | referido</summary>
+        [StringLength(40)]
+        public string? Origen { get; set; }
+
+        /// <summary>Solución o sector que eligió el visitante en el formulario</summary>
+        [StringLength(120)]
+        public string? OrigenDetalle { get; set; }
+
+        public string? MensajeInicial { get; set; }
+
         public bool Activo { get; set; } = true;
 
         public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;

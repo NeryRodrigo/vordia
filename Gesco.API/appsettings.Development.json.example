@@ -5,6 +5,10 @@
       "Microsoft.AspNetCore": "Warning"
     }
   },
+  "EmailSettings": {
+    "SenderEmail": "cuenta.que.envia@gmail.com",
+    "AppPassword": "LOS_16_CARACTERES_SIN_ESPACIOS"
+  },
   "AndeConfig": {
     "PortalUrl": "https://www.ande.gov.py/servicios/",
     "TipoDocumento": "TD001",
