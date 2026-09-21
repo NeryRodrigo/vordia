@@ -137,19 +137,40 @@ namespace Gesco.Application.Services
             var nombre = request.Nombre.Trim();
             var email = request.Email.Trim();
             var telefono = string.IsNullOrWhiteSpace(request.Telefono) ? null : request.Telefono.Trim();
+            var cargo = string.IsNullOrWhiteSpace(request.Cargo) ? null : request.Cargo.Trim();
+            var ciudad = string.IsNullOrWhiteSpace(request.Ciudad) ? null : request.Ciudad.Trim();
             var codigo = NormalizarSolucion(request.Sector);
             var solucion = codigo != null ? SolucionesWeb.GetValueOrDefault(codigo) : null;
+            var tamano = EtiquetaTamano(request.Tamano);
+            var gestion = EtiquetaGestion(request.GestionActual);
+            var horario = string.IsNullOrWhiteSpace(request.HorarioContacto) ? null : request.HorarioContacto.Trim();
+            var necesidad = string.IsNullOrWhiteSpace(request.Necesidad) ? null : request.Necesidad.Trim();
 
             var detalle = string.Join(
                 Environment.NewLine,
                 new[]
                 {
                     $"Nombre: {nombre}",
+                    cargo != null ? $"Cargo: {cargo}" : null,
                     $"Empresa: {request.Empresa.Trim()}",
+                    ciudad != null ? $"Ciudad: {ciudad}" : null,
                     $"Email: {email}",
                     telefono != null ? $"Teléfono: {telefono}" : null,
                     $"Interés: {solucion ?? "Todavía no lo definió"}",
-                    !string.IsNullOrWhiteSpace(request.Necesidad) ? $"Necesidad: {request.Necesidad.Trim()}" : null
+                    tamano != null ? $"Tamaño de operación: {tamano}" : null,
+                    gestion != null ? $"Cómo gestiona hoy: {gestion}" : null,
+                    horario != null ? $"Mejor horario: {horario}" : null,
+                    necesidad != null ? $"Necesidad: {necesidad}" : null
+                }.Where(l => l != null));
+
+            var notasFicha = string.Join(
+                Environment.NewLine,
+                new[]
+                {
+                    ciudad != null ? $"Ciudad: {ciudad}" : null,
+                    tamano != null ? $"Operación: {tamano}" : null,
+                    gestion != null ? $"Hoy: {gestion}" : null,
+                    horario != null ? $"Contactar: {horario}" : null
                 }.Where(l => l != null));
 
             // Si la persona vuelve a enviar el formulario, se suma al historial en lugar de duplicar el lead
@@ -159,6 +180,16 @@ namespace Gesco.Application.Services
             if (existente != null)
             {
                 existente.FechaActualizacion = DateTime.UtcNow;
+                if (cargo != null) existente.ContactoCargo = cargo;
+                if (telefono != null) existente.ContactoTelefono = telefono;
+                if (ciudad != null) existente.Rubro = ciudad;
+                if (solucion != null) existente.SistemaServicio = solucion;
+                if (codigo != null) existente.OrigenDetalle = codigo;
+                if (necesidad != null) existente.MensajeInicial = necesidad;
+                if (!string.IsNullOrWhiteSpace(notasFicha))
+                    existente.Notas = string.IsNullOrWhiteSpace(existente.Notas)
+                        ? notasFicha
+                        : existente.Notas + Environment.NewLine + notasFicha;
                 _context.CrmHistorial.Add(new CrmHistorial
                 {
                     ClienteId = existente.ClienteId,
@@ -177,17 +208,22 @@ namespace Gesco.Application.Services
             {
                 EmpresaId = empresaId,
                 RazonSocial = request.Empresa.Trim(),
+                Rubro = ciudad,
                 Email = email,
                 Telefono = telefono,
                 ContactoNombre = nombre,
+                ContactoCargo = cargo,
                 ContactoEmail = email,
                 ContactoTelefono = telefono,
                 EstadoPipeline = "Prospecto",
                 SistemaServicio = solucion,
-                ProximosPasos = "Contactar — solicitud entrante desde la web",
+                ProximosPasos = horario != null
+                    ? $"Contactar — {horario}"
+                    : "Contactar — solicitud entrante desde la web",
+                Notas = string.IsNullOrWhiteSpace(notasFicha) ? null : notasFicha,
                 Origen = "web",
                 OrigenDetalle = codigo,
-                MensajeInicial = string.IsNullOrWhiteSpace(request.Necesidad) ? null : request.Necesidad.Trim(),
+                MensajeInicial = necesidad,
                 Activo = true,
                 FechaCreacion = DateTime.UtcNow
             };
@@ -388,11 +424,14 @@ namespace Gesco.Application.Services
         private static readonly Dictionary<string, string> SolucionesWeb = new(StringComparer.OrdinalIgnoreCase)
         {
             ["HQ"] = "Vordia HQ — dirección y control",
-            ["HABITAT"] = "Vordia Habitat — inmuebles y alquileres",
+            ["HABITAT"] = "Vordia Habitat — condominios y edificios",
             ["STAY"] = "Vordia Stay — hospedaje y reservas",
             ["DINE"] = "Vordia Dine — gastronomía",
             ["RETAIL"] = "Vordia Retail — comercio y stock",
-            ["AGRO"] = "Vordia Agro — campo y campañas"
+            ["BOUTIQUE"] = "Vordia Boutique — moda",
+            ["OPS"] = "Vordia Ops — operaciones y logística",
+            ["AGRO"] = "Vordia Agro — campo y campañas",
+            ["HABLAR"] = "Todavía no lo definió"
         };
 
         private static string? NormalizarSolucion(string? sector)
@@ -401,6 +440,24 @@ namespace Gesco.Application.Services
             var raw = sector.Trim().ToUpperInvariant();
             return SolucionesWeb.ContainsKey(raw) ? raw : null;
         }
+
+        private static string? EtiquetaTamano(string? tamano) => (tamano ?? "").Trim().ToLowerInvariant() switch
+        {
+            "1-10" => "1 a 10 personas / unidades",
+            "11-50" => "11 a 50",
+            "51-200" => "51 a 200",
+            "200+" => "Más de 200",
+            _ => string.IsNullOrWhiteSpace(tamano) ? null : tamano.Trim()
+        };
+
+        private static string? EtiquetaGestion(string? gestion) => (gestion ?? "").Trim().ToLowerInvariant() switch
+        {
+            "planillas" => "Planillas y WhatsApp",
+            "otro_sistema" => "Ya usa otro sistema",
+            "mixto" => "Mixto (planillas + sistema)",
+            "nada" => "Todavía no tiene un método claro",
+            _ => string.IsNullOrWhiteSpace(gestion) ? null : gestion.Trim()
+        };
 
         private static string? NormalizarEstado(string? estado)
         {

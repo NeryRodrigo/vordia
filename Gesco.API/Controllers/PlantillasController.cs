@@ -123,7 +123,7 @@ namespace Gesco.API.Controllers
                     }
                     if (existing.Tipo != official.Tipo)
                     {
-                        existing.Tipo = official.Tipo;
+                    existing.Tipo = official.Tipo;
                         needsUpdate = true;
                     }
                     if (existing.Descripcion != official.Descripcion)
@@ -139,8 +139,8 @@ namespace Gesco.API.Controllers
                     if (needsUpdate)
                     {
                         existing.FechaActualizacion = DateTime.Now;
-                        _context.PlantillasDocumento.Update(existing);
-                        changed = true;
+                    _context.PlantillasDocumento.Update(existing);
+                    changed = true;
                     }
                 }
             }

@@ -85,9 +85,26 @@ namespace Gesco.Application.DTOs
         [StringLength(50)]
         public string? Telefono { get; set; }
 
-        /// <summary>Código de solución elegido: HQ, HABITAT, STAY, DINE, RETAIL, AGRO o "hablar".</summary>
+        [StringLength(100)]
+        public string? Cargo { get; set; }
+
+        [StringLength(80)]
+        public string? Ciudad { get; set; }
+
+        /// <summary>Código de solución: HABITAT, STAY, DINE, RETAIL, BOUTIQUE, OPS, AGRO o "hablar".</summary>
         [StringLength(120)]
         public string? Sector { get; set; }
+
+        /// <summary>Escala aproximada: 1-10, 11-50, 51-200, 200+.</summary>
+        [StringLength(40)]
+        public string? Tamano { get; set; }
+
+        /// <summary>planillas | otro_sistema | mixto | nada</summary>
+        [StringLength(40)]
+        public string? GestionActual { get; set; }
+
+        [StringLength(40)]
+        public string? HorarioContacto { get; set; }
 
         [StringLength(2000)]
         public string? Necesidad { get; set; }
