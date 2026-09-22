@@ -18,8 +18,19 @@ using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
-    ?? new[] { "http://localhost:3000", "https://vordia.duckdns.org" };
+var corsOrigins = (builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
+    ?? Array.Empty<string>())
+    .Concat(new[]
+    {
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "https://vordia.duckdns.org",
+        "http://vordia.duckdns.org",
+        "https://vordia.com.py",
+        "https://www.vordia.com.py",
+    })
+    .Distinct(StringComparer.OrdinalIgnoreCase)
+    .ToArray();
 
 builder.Services.AddCors(options =>
 {
