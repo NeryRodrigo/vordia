@@ -32,10 +32,12 @@ services:
 
   frontend:
     build:
-      context: ./gesco-web # <--- Asegrate que coincida con el nombre de tu carpeta
+      context: ./gesco-web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-https://vordia.duckdns.org}
     container_name: gesco-web
     environment:
-      - NEXT_PUBLIC_API_URL:"http://vordia-aguz.duckdns.org:8080" # Tu IP de Google Cloud
+      - NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-https://vordia.duckdns.org}
     ports:
       - "3000:3000" # Mapeamos el puerto 80 del exterior al 3000 de Next.js
     depends_on:
