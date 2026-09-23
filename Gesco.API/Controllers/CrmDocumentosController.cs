@@ -42,7 +42,14 @@ namespace Gesco.API.Controllers
             _almacen = config["Storage:CrmDocumentos"]
                        ?? Path.Combine(Directory.GetCurrentDirectory(), "almacen-crm", "documentos");
 
-            if (!Directory.Exists(_almacen)) Directory.CreateDirectory(_almacen);
+            try
+            {
+                if (!Directory.Exists(_almacen)) Directory.CreateDirectory(_almacen);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "No se pudo crear el directorio de documentos {Ruta}", _almacen);
+            }
         }
 
         [HttpGet("documentos")]
@@ -54,14 +61,30 @@ namespace Gesco.API.Controllers
             [FromQuery] bool porVencer = false)
         {
             if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
-            return Ok(await _documentos.ListarAsync(empresaId, clienteId, categoria, q, porVencer));
+            try
+            {
+                return Ok(await _documentos.ListarAsync(empresaId, clienteId, categoria, q, porVencer));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GET documentos empresaId={EmpresaId}", empresaId);
+                return StatusCode(500, new { mensaje = "No se pudieron listar los documentos. ¿Existe dbo.CrmDocumentos en GESCO_DB?" });
+            }
         }
 
         [HttpGet("documentos/resumen")]
         public async Task<IActionResult> Resumen([FromQuery] int empresaId)
         {
             if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
-            return Ok(await _documentos.ResumenAsync(empresaId));
+            try
+            {
+                return Ok(await _documentos.ResumenAsync(empresaId));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "GET documentos/resumen empresaId={EmpresaId}", empresaId);
+                return StatusCode(500, new { mensaje = "No se pudo armar el resumen de documentos. ¿Existe dbo.CrmDocumentos en GESCO_DB?" });
+            }
         }
 
         [HttpGet("documentos/categorias")]
