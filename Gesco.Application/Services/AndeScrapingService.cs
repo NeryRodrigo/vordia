@@ -32,7 +32,8 @@ namespace Gesco.Application.Services
             string? secRec = null,
             string? fFact = null,
             bool electronica = true,
-            string? kwfxToken = null);
+            string? kwfxToken = null,
+            string? origen = null);
     }
 
     public class AndeScrapingService : IAndeScrapingService
@@ -1371,7 +1372,8 @@ namespace Gesco.Application.Services
             string? secRec = null,
             string? fFact = null,
             bool electronica = true,
-            string? kwfxToken = null)
+            string? kwfxToken = null,
+            string? origen = null)
         {
             var nisLimpio = new string((nis ?? "").Where(char.IsDigit).ToArray());
             if (nisLimpio.Length == 0) return null;
@@ -1393,6 +1395,10 @@ namespace Gesco.Application.Services
                 }
                 var qs = $"nro_nis={nisLimpio}&sec_nis={secNis}&sec_rec={secRec}&f_fact={f}";
                 url = openBase + (electronica ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs;
+            }
+            else if (string.Equals(origen, "penultima", StringComparison.OrdinalIgnoreCase))
+            {
+                url = openBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}";
             }
             else
             {

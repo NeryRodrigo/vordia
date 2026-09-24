@@ -24,6 +24,7 @@ namespace Gesco.Application.Services
             string? secRec = null,
             string? fFact = null,
             bool? electronica = null,
+            string? origen = null,
             CancellationToken ct = default);
     }
 
@@ -294,11 +295,15 @@ namespace Gesco.Application.Services
             string? secRec = null,
             string? fFact = null,
             bool? electronica = null,
+            string? origen = null,
             CancellationToken ct = default)
         {
             var nisLimpio = new string((nis ?? "").Where(char.IsDigit).ToArray());
             if (nisLimpio.Length == 0)
                 return null;
+
+            var origenNorm = (origen ?? "").Trim().ToLowerInvariant();
+            var esPenultima = origenNorm == "penultima";
 
             await Gate.WaitAsync(ct);
             var urls = new List<string>();
@@ -328,6 +333,12 @@ namespace Gesco.Application.Services
                     urls.Add(OpenApiBase + (!elec ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs);
                 }
 
+                if (esPenultima)
+                {
+                    urls.Add(OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
+                    urls.Add(OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nisLimpio}");
+                }
+
                 urls.Add(OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
                 urls.Add(OpenApiBase + $"v4/suministro/ultimaFacturaPendientePdf?nis={nisLimpio}");
 
@@ -340,8 +351,11 @@ namespace Gesco.Application.Services
                 if (!EsBloqueoRadware(situacionTxt) && !string.IsNullOrWhiteSpace(situacionTxt))
                     urls.AddRange(ConstruirUrlsPdfDesdeSituacion(nisLimpio, situacionTxt));
 
-                urls.Add(OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
-                urls.Add(OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nisLimpio}");
+                if (!esPenultima)
+                {
+                    urls.Add(OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
+                    urls.Add(OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nisLimpio}");
+                }
             }
             finally
             {
@@ -725,50 +739,16 @@ namespace Gesco.Application.Services
 
         private static IEnumerable<string> ArmarUrlsPdfFactura(string nis, JsonElement fact)
         {
-            string? secNis = null, secRec = null, fFactRaw = null;
             JsonElement? recibo = fact.TryGetProperty("recibo", out var rec) && rec.ValueKind == JsonValueKind.Object
                 ? rec
                 : null;
 
-            foreach (var key in new[] { "sec_nis", "secNis" })
-            {
-                if (fact.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                {
-                    secNis = v.ToString();
-                    break;
-                }
-                if (recibo.HasValue && recibo.Value.TryGetProperty(key, out var vr) && !string.IsNullOrWhiteSpace(vr.ToString()))
-                {
-                    secNis = vr.ToString();
-                    break;
-                }
-            }
-            foreach (var key in new[] { "sec_rec", "secRec" })
-            {
-                if (fact.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                {
-                    secRec = v.ToString();
-                    break;
-                }
-                if (recibo.HasValue && recibo.Value.TryGetProperty(key, out var vr) && !string.IsNullOrWhiteSpace(vr.ToString()))
-                {
-                    secRec = vr.ToString();
-                    break;
-                }
-            }
-            foreach (var key in new[] { "fechaFacturacion", "f_fact", "fechaEmision", "emision" })
-            {
-                if (fact.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                {
-                    fFactRaw = v.ToString();
-                    break;
-                }
-                if (recibo.HasValue && recibo.Value.TryGetProperty(key, out var vr) && !string.IsNullOrWhiteSpace(vr.ToString()))
-                {
-                    fFactRaw = vr.ToString();
-                    break;
-                }
-            }
+            var secNis = TextoCampoJson(fact, "sec_nis", "secNis", "secnis", "nroSecNis")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_nis", "secNis") : null);
+            var secRec = TextoCampoJson(fact, "sec_rec", "secRec", "secrec", "nroRecibo", "nro_recibo")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_rec", "secRec", "nroRecibo") : null);
+            var fFactRaw = TextoCampoJson(fact, "fechaFacturacion", "f_fact", "fechaEmision", "emision")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "fechaFacturacion", "f_fact", "fechaEmision", "emision") : null);
 
             if (string.IsNullOrWhiteSpace(secNis) || string.IsNullOrWhiteSpace(secRec) || string.IsNullOrWhiteSpace(fFactRaw))
                 yield break;
@@ -778,6 +758,41 @@ namespace Gesco.Application.Services
             var qs = $"nro_nis={nis}&sec_nis={secNis}&sec_rec={secRec}&f_fact={fFact}";
             yield return OpenApiBase + "v5/suministro/facturaElectronicaPdf?" + qs;
             yield return OpenApiBase + "v4/suministro/facturaPdf?" + qs;
+        }
+
+        private static bool EsJsonVacio(JsonElement v) =>
+            v.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+            || (v.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(v.GetString()));
+
+        private static string? TextoCampoJson(JsonElement el, params string[] keys)
+        {
+            if (el.ValueKind != JsonValueKind.Object)
+                return null;
+
+            foreach (var key in keys)
+            {
+                if (el.TryGetProperty(key, out var exact) && !EsJsonVacio(exact))
+                {
+                    var s = exact.ValueKind == JsonValueKind.String ? exact.GetString() : exact.ToString();
+                    if (!string.IsNullOrWhiteSpace(s))
+                        return s.Trim();
+                }
+
+                var keyNorm = key.Replace("_", "");
+                foreach (var p in el.EnumerateObject())
+                {
+                    if (!string.Equals(p.Name, key, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(p.Name.Replace("_", ""), keyNorm, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (EsJsonVacio(p.Value))
+                        continue;
+                    var s = p.Value.ValueKind == JsonValueKind.String ? p.Value.GetString() : p.Value.ToString();
+                    if (!string.IsNullOrWhiteSpace(s))
+                        return s.Trim();
+                }
+            }
+
+            return null;
         }
 
         /// <summary>ANDE espera f_fact como dd/MM/yyyy (desde yyyy-MM-dd u otros).</summary>
@@ -1003,8 +1018,20 @@ namespace Gesco.Application.Services
                 }
 
                 dto.Facturas = dto.Facturas
-                    .GroupBy(f => $"{f.Vencimiento}|{f.Monto:0}|{f.Estado}")
-                    .Select(g => g.First())
+                    .GroupBy(f =>
+                    {
+                        var fecha = FormatearFechaFacturaAnde(
+                            string.IsNullOrWhiteSpace(f.Vencimiento) ? f.Emision : f.Vencimiento);
+                        var estado = (f.Estado ?? "").Contains("Pendiente", StringComparison.OrdinalIgnoreCase)
+                            ? "P"
+                            : "C";
+                        return $"{fecha}|{f.Monto:0}|{estado}";
+                    })
+                    .Select(g => g
+                        .OrderByDescending(x =>
+                            !string.IsNullOrWhiteSpace(x.SecNis) && !string.IsNullOrWhiteSpace(x.SecRec))
+                        .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.FechaFacturacion))
+                        .First())
                     .ToList();
 
                 dto.SaldoDeuda = dto.Facturas
@@ -1262,26 +1289,12 @@ namespace Gesco.Application.Services
             if (monto <= 0 && string.IsNullOrWhiteSpace(emision) && string.IsNullOrWhiteSpace(venc))
                 return;
 
-            string? secNis = null, secRec = null, fFact = null;
-            foreach (var key in new[] { "sec_nis", "secNis" })
-            {
-                if (item.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                { secNis = v.ToString(); break; }
-                if (recibo.HasValue && recibo.Value.TryGetProperty(key, out var vr) && !string.IsNullOrWhiteSpace(vr.ToString()))
-                { secNis = vr.ToString(); break; }
-            }
-            foreach (var key in new[] { "sec_rec", "secRec" })
-            {
-                if (item.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                { secRec = v.ToString(); break; }
-                if (recibo.HasValue && recibo.Value.TryGetProperty(key, out var vr) && !string.IsNullOrWhiteSpace(vr.ToString()))
-                { secRec = vr.ToString(); break; }
-            }
-            foreach (var key in new[] { "fechaFacturacion", "f_fact" })
-            {
-                if (item.TryGetProperty(key, out var v) && !string.IsNullOrWhiteSpace(v.ToString()))
-                { fFact = v.ToString(); break; }
-            }
+            string? secNis = TextoCampoJson(item, "sec_nis", "secNis", "secnis", "nroSecNis", "secuenciaNis")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_nis", "secNis", "secnis") : null);
+            string? secRec = TextoCampoJson(item, "sec_rec", "secRec", "secrec", "nroRecibo", "nro_recibo", "nroRec")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_rec", "secRec", "nroRecibo", "nro_recibo") : null);
+            string? fFact = TextoCampoJson(item, "fechaFacturacion", "f_fact", "fechaEmision", "emision")
+                ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "fechaFacturacion", "f_fact", "fechaEmision", "emision") : null);
             if (string.IsNullOrWhiteSpace(fFact))
                 fFact = emision;
 

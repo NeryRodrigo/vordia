@@ -90,7 +90,8 @@ namespace Gesco.API.Controllers
             [FromQuery] string? secNis = null,
             [FromQuery] string? secRec = null,
             [FromQuery] string? fFact = null,
-            [FromQuery] bool? electronica = null)
+            [FromQuery] bool? electronica = null,
+            [FromQuery] string? origen = null)
         {
             try
             {
@@ -107,12 +108,12 @@ namespace Gesco.API.Controllers
                 var kwfx = _andeJwtConsultaService.GetKwfxTokenActual();
 
                 var pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
-                    nis, null, secNis, secRec, fFact, electronica ?? true, kwfx);
+                    nis, null, secNis, secRec, fFact, electronica ?? true, kwfx, origen);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
                 {
                     pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
-                        nis, secNis, secRec, fFact, electronica);
+                        nis, secNis, secRec, fFact, electronica, origen);
                 }
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
