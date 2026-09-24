@@ -372,32 +372,27 @@ namespace Gesco.Application.Services
                 if (pdfHttp != null) return pdfHttp;
             }
 
-            // 2) Un solo reCAPTCHA + HTTP. No repetir Chrome por cada URL (eso causa 504 en Nginx).
-            string? recapt = null;
-            try
+            // 2) Chrome: el recapt de ANDE solo vale en XHR del portal, no en HTTP del servidor.
+            foreach (var url in candidatas.Take(2))
             {
-                recapt = await ObtenerTokenRecaptchaRapidoAsync(kwfx, ct);
-            }
-            catch (ProcessException ex)
-            {
-                _logger.LogWarning("ANDE PDF: Chrome no disponible ({Msg})", ex.Message);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "ANDE PDF: no se obtuvo reCAPTCHA");
-            }
-
-            if (!string.IsNullOrWhiteSpace(recapt))
-            {
-                foreach (var url in candidatas)
+                try
                 {
-                    _logger.LogInformation("ANDE PDF HTTP+recapt: {Url}", url);
-                    var pdfHttp = await TryDescargarPdfAsync(url, ct, recapt);
-                    if (pdfHttp != null) return pdfHttp;
+                    _logger.LogInformation("ANDE PDF Chrome XHR: {Url}", url);
+                    var pdf = await DescargarPdfConRecaptchaBrowserAsync(url, kwfx, ct);
+                    if (pdf != null) return pdf;
+                }
+                catch (ProcessException ex)
+                {
+                    _logger.LogWarning("ANDE PDF: Chrome no disponible ({Msg})", ex.Message);
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ANDE PDF Chrome XHR falló");
                 }
             }
 
-            _logger.LogInformation("ANDE PDF: HTTP/reCAPTCHA sin resultado para NIS {Nis}", nisLimpio);
+            _logger.LogInformation("ANDE PDF: sin resultado para NIS {Nis}", nisLimpio);
             return null;
         }
 
@@ -417,6 +412,8 @@ namespace Gesco.Application.Services
 
                 using var req = new HttpRequestMessage(HttpMethod.Get, urlFinal);
                 req.Headers.TryAddWithoutValidation("Accept", "application/pdf,*/*");
+                req.Headers.TryAddWithoutValidation("Referer", "https://www.ande.gov.py/servicios/");
+                req.Headers.TryAddWithoutValidation("Origin", "https://www.ande.gov.py");
                 if (!string.IsNullOrWhiteSpace(_jwt))
                     req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _jwt);
 
@@ -470,28 +467,7 @@ namespace Gesco.Application.Services
                     }", kwfxToken);
                 }
 
-                // Esperar reCAPTCHA del portal CON la site key oficial (CLAVE_SITIO_WEB).
-                // Si usamos otra key, ANDE responde: "Client Key no válido."
-                try
-                {
-                    await page.WaitForFunctionAsync(
-                        "() => typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10 && typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                        new WaitForFunctionOptions { Timeout = 30000 });
-                }
-                catch
-                {
-                    _logger.LogWarning("ANDE PDF: CLAVE_SITIO_WEB/grecaptcha no apareció a tiempo");
-                    return null;
-                }
-
-                var claveUsada = await page.EvaluateFunctionAsync<string>(
-                    $"() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB) ? CLAVE_SITIO_WEB : '{AndeRecaptchaSiteKey}'");
-
-                var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
-                    await new Promise(r => grecaptcha.ready(r));
-                    return await grecaptcha.execute(siteKey, { action: 'submit' });
-                }", claveUsada);
-
+                var (token, claveUsada) = await EjecutarRecaptchaEnPaginaAsync(page);
                 if (string.IsNullOrWhiteSpace(token))
                 {
                     _logger.LogWarning("ANDE PDF: token reCAPTCHA vacío");
@@ -727,83 +703,54 @@ namespace Gesco.Application.Services
             return _pdfPage;
         }
 
-        /// <summary>Un token reCAPTCHA para las URLs HTTP. Inyecta el script si el portal no lo carga.</summary>
-        private async Task<string?> ObtenerTokenRecaptchaRapidoAsync(string? kwfxToken, CancellationToken ct)
+        /// <summary>Token reCAPTCHA en la página del portal. Inyecta el script si ANDE no lo cargó.</summary>
+        private async Task<(string? Token, string SiteKey)> EjecutarRecaptchaEnPaginaAsync(IPage page)
         {
-            await PdfBrowserLock.WaitAsync(ct);
+            var tieneGrecaptcha = false;
             try
             {
-                var page = await EnsurePdfPortalPageAsync(ct);
-                await InyectarCookiesHttpEnPaginaAsync(page);
-                if (!string.IsNullOrWhiteSpace(kwfxToken))
-                {
-                    await page.EvaluateFunctionAsync(@"(tok) => {
-                        try {
-                            const key = 'kwfSesionUsuarioMiCuenta_produccion';
-                            const prev = JSON.parse(localStorage.getItem(key) || '{}');
-                            prev.token = tok;
-                            localStorage.setItem(key, JSON.stringify(prev));
-                        } catch (e) {}
-                    }", kwfxToken);
-                }
-
-                var tieneGrecaptcha = false;
-                try
-                {
-                    await page.WaitForFunctionAsync(
-                        "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                        new WaitForFunctionOptions { Timeout = 8000 });
-                    tieneGrecaptcha = true;
-                }
-                catch
-                {
-                    /* el portal a veces no carga grecaptcha (WAF / headless) */
-                }
-
-                var siteKey = AndeRecaptchaSiteKey;
-                try
-                {
-                    var portalKey = await page.EvaluateFunctionAsync<string>(
-                        "() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10) ? CLAVE_SITIO_WEB : ''");
-                    if (!string.IsNullOrWhiteSpace(portalKey))
-                        siteKey = portalKey;
-                }
-                catch { /* usar key conocida */ }
-
-                if (!tieneGrecaptcha)
-                {
-                    _logger.LogInformation("ANDE PDF: inyectando script reCAPTCHA (siteKey={Key})", siteKey);
-                    await page.EvaluateFunctionAsync(@"(key) => new Promise((resolve, reject) => {
-                        if (window.grecaptcha && grecaptcha.execute) return resolve(true);
-                        var s = document.createElement('script');
-                        s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(key);
-                        s.onload = () => resolve(true);
-                        s.onerror = () => reject(new Error('recaptcha script'));
-                        document.head.appendChild(s);
-                    })", siteKey);
-                    await page.WaitForFunctionAsync(
-                        "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                        new WaitForFunctionOptions { Timeout = 10000 });
-                }
-
-                var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
-                    await new Promise(r => grecaptcha.ready(r));
-                    return await grecaptcha.execute(siteKey, { action: 'submit' });
-                }", siteKey);
-
-                if (string.IsNullOrWhiteSpace(token))
-                {
-                    _logger.LogWarning("ANDE PDF: token reCAPTCHA vacío");
-                    return null;
-                }
-
-                _logger.LogInformation("ANDE PDF: reCAPTCHA OK (len={Len})", token.Length);
-                return token;
+                await page.WaitForFunctionAsync(
+                    "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                    new WaitForFunctionOptions { Timeout = 8000 });
+                tieneGrecaptcha = true;
             }
-            finally
+            catch
             {
-                PdfBrowserLock.Release();
+                /* WAF / headless: el portal a veces no carga grecaptcha */
             }
+
+            var siteKey = AndeRecaptchaSiteKey;
+            try
+            {
+                var portalKey = await page.EvaluateFunctionAsync<string>(
+                    "() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10) ? CLAVE_SITIO_WEB : ''");
+                if (!string.IsNullOrWhiteSpace(portalKey))
+                    siteKey = portalKey;
+            }
+            catch { /* usar key conocida */ }
+
+            if (!tieneGrecaptcha)
+            {
+                _logger.LogInformation("ANDE PDF: inyectando script reCAPTCHA (siteKey={Key})", siteKey);
+                await page.EvaluateFunctionAsync(@"(key) => new Promise((resolve, reject) => {
+                    if (window.grecaptcha && grecaptcha.execute) return resolve(true);
+                    var s = document.createElement('script');
+                    s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(key);
+                    s.onload = () => resolve(true);
+                    s.onerror = () => reject(new Error('recaptcha script'));
+                    document.head.appendChild(s);
+                })", siteKey);
+                await page.WaitForFunctionAsync(
+                    "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                    new WaitForFunctionOptions { Timeout = 10000 });
+            }
+
+            var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
+                await new Promise(r => grecaptcha.ready(r));
+                return await grecaptcha.execute(siteKey, { action: 'submit' });
+            }", siteKey);
+
+            return (string.IsNullOrWhiteSpace(token) ? null : token, siteKey);
         }
 
         private static bool EsPdfBytes(byte[]? bytes) =>
