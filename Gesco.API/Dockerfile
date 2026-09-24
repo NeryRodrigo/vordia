@@ -7,10 +7,11 @@ EXPOSE 8080
 EXPOSE 8081
 
 # Chrome/Puppeteer: el PDF oficial de ANDE necesita grecaptcha en el portal.
-# aspnet:8.0 es Debian slim y no trae libglib ni el resto de .so que Chrome 130 exige.
+# Se instala Chromium en la imagen (no se descarga a /app en runtime: el user app no puede escribir ahí).
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
+        chromium \
         fonts-liberation \
         libasound2 \
         libatk-bridge2.0-0 \
@@ -39,7 +40,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libxshmfence1 \
         wget \
         xdg-utils \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && (test -x /usr/bin/chromium || test -x /usr/bin/chromium-browser)
+ENV CHROME_PATH=/usr/bin/chromium
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_CACHE_DIR=/tmp/puppeteer-chrome
 USER $APP_UID
 
 
@@ -68,7 +73,7 @@ FROM base AS final
 WORKDIR /app
 USER root
 COPY --from=publish /app/publish .
-RUN mkdir -p /home/app/.local/share/Gesco /tmp/Gesco /app/chrome /app/almacen-crm \
-    && chown -R $APP_UID:$APP_UID /home/app /tmp/Gesco /app/chrome /app/almacen-crm
+RUN mkdir -p /home/app/.local/share/Gesco /tmp/Gesco /tmp/puppeteer-chrome /app/almacen-crm \
+    && chown -R $APP_UID:$APP_UID /app /home/app /tmp/Gesco /tmp/puppeteer-chrome
 USER $APP_UID
 ENTRYPOINT ["dotnet", "Gesco.API.dll"]
