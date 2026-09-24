@@ -40,6 +40,11 @@ namespace Gesco.Application.Services
                     @"Google\Chrome\Application\chrome.exe"),
                 @"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
                 @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+                "/usr/bin/google-chrome-stable",
+                "/usr/bin/google-chrome",
+                "/usr/bin/chromium",
+                "/usr/bin/chromium-browser",
+                "/usr/lib/chromium/chromium",
             };
 
             return candidates.FirstOrDefault(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p!));

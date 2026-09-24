@@ -16,6 +16,8 @@ services:
       context: .
       dockerfile: Gesco.API/Dockerfile
     container_name: gesco-api
+    # Chrome (PDF ANDE) necesita /dev/shm; sin esto falla el launch en Linux.
+    shm_size: "2gb"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Server=db;Database=GESCO_DB;User Id=sa;Password=Nrcm.2024*;TrustServerCertificate=True;
