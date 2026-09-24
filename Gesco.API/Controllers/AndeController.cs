@@ -103,17 +103,16 @@ namespace Gesco.API.Controllers
                         mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
                     });
 
-                // Sesión JWT primero (token); PDF prioriza Chrome del portal (más estable) + kwfx.
+                // HTTP/JWT primero (ultima o penultima). Chrome solo si ANDE exige reCAPTCHA.
                 await _andeJwtConsultaService.AsegurarJwtAsync();
-                var kwfx = _andeJwtConsultaService.GetKwfxTokenActual();
-
-                var pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
-                    nis, null, secNis, secRec, fFact, electronica ?? true, kwfx, origen);
+                var pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
+                    nis, secNis, secRec, fFact, electronica, origen);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
                 {
-                    pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
-                        nis, secNis, secRec, fFact, electronica, origen);
+                    var kwfx = _andeJwtConsultaService.GetKwfxTokenActual();
+                    pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
+                        nis, null, secNis, secRec, fFact, electronica ?? true, kwfx, origen);
                 }
 
                 if (pdfBytes == null || pdfBytes.Length == 0)

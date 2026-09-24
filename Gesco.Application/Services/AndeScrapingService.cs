@@ -1433,14 +1433,20 @@ namespace Gesco.Application.Services
                 }
                 var portalUrl = _config["AndeConfig:PortalUrl"] ?? "https://www.ande.gov.py/servicios/";
 
-                if (!(page.Url ?? "").Contains("ande.gov.py/servicios", StringComparison.OrdinalIgnoreCase))
+                if (!(page.Url ?? "").Contains("ande.gov.py", StringComparison.OrdinalIgnoreCase))
                 {
-                    await page.GoToAsync(portalUrl, new NavigationOptions
+                    try
                     {
-                        WaitUntil = new[] { WaitUntilNavigation.Networkidle0 },
-                        Timeout = 90000
-                    });
-                    await Task.Delay(2500);
+                        await page.GoToAsync(portalUrl, new NavigationOptions
+                        {
+                            WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                            Timeout = 20000
+                        });
+                    }
+                    catch (Exception exNav)
+                    {
+                        _logger.LogWarning("ANDE portal PDF: navegación lenta ({Msg})", exNav.Message);
+                    }
                 }
 
                 if (!string.IsNullOrWhiteSpace(kwfxToken))
@@ -1458,8 +1464,8 @@ namespace Gesco.Application.Services
                 try
                 {
                     await page.WaitForFunctionAsync(
-                        "() => typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10 && typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                        new WaitForFunctionOptions { Timeout = 30000 });
+                        "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                        new WaitForFunctionOptions { Timeout = 8000 });
             }
             catch (Exception ex)
             {

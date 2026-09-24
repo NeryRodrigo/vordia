@@ -362,33 +362,42 @@ namespace Gesco.Application.Services
                 Gate.Release();
             }
 
-            // Con params concretos: pocas URLs (token reCAPTCHA es de un solo uso por intento).
-            var maxIntentos = (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
-                ? 3
-                : 4;
-            foreach (var url in urls.Distinct().Take(maxIntentos))
+            var candidatas = urls.Distinct().Take(3).ToList();
+
+            // 1) HTTP directo (sin Chrome). Cubre ultima y penultima en pocos segundos.
+            foreach (var url in candidatas)
             {
-                try
+                _logger.LogInformation("ANDE PDF HTTP: {Url}", url);
+                var pdfHttp = await TryDescargarPdfAsync(url, ct, null);
+                if (pdfHttp != null) return pdfHttp;
+            }
+
+            // 2) Un solo reCAPTCHA + HTTP. No repetir Chrome por cada URL (eso causa 504 en Nginx).
+            string? recapt = null;
+            try
+            {
+                recapt = await ObtenerTokenRecaptchaRapidoAsync(kwfx, ct);
+            }
+            catch (ProcessException ex)
+            {
+                _logger.LogWarning("ANDE PDF: Chrome no disponible ({Msg})", ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ANDE PDF: no se obtuvo reCAPTCHA");
+            }
+
+            if (!string.IsNullOrWhiteSpace(recapt))
+            {
+                foreach (var url in candidatas)
                 {
-                    _logger.LogInformation("ANDE PDF intentando: {Url}", url);
-                    var pdf = await DescargarPdfConRecaptchaBrowserAsync(url, kwfx, ct);
-                    if (pdf != null) return pdf;
-                }
-                catch (ProcessException ex)
-                {
-                    // Chrome del perfil PDF no arrancó: no reintentar más URLs; el controller usa AndeScrapingService.
-                    _logger.LogWarning(
-                        "ANDE PDF: Chrome (JWT) no disponible ({Msg}). Se usará el fallback del portal.",
-                        ex.Message);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "ANDE PDF intento fallido en {Url}", url);
+                    _logger.LogInformation("ANDE PDF HTTP+recapt: {Url}", url);
+                    var pdfHttp = await TryDescargarPdfAsync(url, ct, recapt);
+                    if (pdfHttp != null) return pdfHttp;
                 }
             }
 
-            _logger.LogInformation("ANDE PDF: JWT/reCAPTCHA sin resultado para NIS {Nis}; el API intentará fallback portal.", nisLimpio);
+            _logger.LogInformation("ANDE PDF: HTTP/reCAPTCHA sin resultado para NIS {Nis}", nisLimpio);
             return null;
         }
 
@@ -699,17 +708,102 @@ namespace Gesco.Application.Services
             }
 
             var url = (_pdfPage.Url ?? "").ToLowerInvariant();
-            if (!url.Contains("ande.gov.py/servicios"))
+            if (!url.Contains("ande.gov.py"))
             {
-                await _pdfPage.GoToAsync(PortalUrl, new NavigationOptions
+                try
                 {
-                    WaitUntil = new[] { WaitUntilNavigation.Networkidle0 },
-                    Timeout = 90000
-                });
-                await Task.Delay(3000, ct);
+                    await _pdfPage.GoToAsync(PortalUrl, new NavigationOptions
+                    {
+                        WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                        Timeout = 20000
+                    });
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("ANDE PDF: portal lento ({Msg})", ex.Message);
+                }
             }
 
             return _pdfPage;
+        }
+
+        /// <summary>Un token reCAPTCHA para las URLs HTTP. Inyecta el script si el portal no lo carga.</summary>
+        private async Task<string?> ObtenerTokenRecaptchaRapidoAsync(string? kwfxToken, CancellationToken ct)
+        {
+            await PdfBrowserLock.WaitAsync(ct);
+            try
+            {
+                var page = await EnsurePdfPortalPageAsync(ct);
+                await InyectarCookiesHttpEnPaginaAsync(page);
+                if (!string.IsNullOrWhiteSpace(kwfxToken))
+                {
+                    await page.EvaluateFunctionAsync(@"(tok) => {
+                        try {
+                            const key = 'kwfSesionUsuarioMiCuenta_produccion';
+                            const prev = JSON.parse(localStorage.getItem(key) || '{}');
+                            prev.token = tok;
+                            localStorage.setItem(key, JSON.stringify(prev));
+                        } catch (e) {}
+                    }", kwfxToken);
+                }
+
+                var tieneGrecaptcha = false;
+                try
+                {
+                    await page.WaitForFunctionAsync(
+                        "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                        new WaitForFunctionOptions { Timeout = 8000 });
+                    tieneGrecaptcha = true;
+                }
+                catch
+                {
+                    /* el portal a veces no carga grecaptcha (WAF / headless) */
+                }
+
+                var siteKey = AndeRecaptchaSiteKey;
+                try
+                {
+                    var portalKey = await page.EvaluateFunctionAsync<string>(
+                        "() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB.length > 10) ? CLAVE_SITIO_WEB : ''");
+                    if (!string.IsNullOrWhiteSpace(portalKey))
+                        siteKey = portalKey;
+                }
+                catch { /* usar key conocida */ }
+
+                if (!tieneGrecaptcha)
+                {
+                    _logger.LogInformation("ANDE PDF: inyectando script reCAPTCHA (siteKey={Key})", siteKey);
+                    await page.EvaluateFunctionAsync(@"(key) => new Promise((resolve, reject) => {
+                        if (window.grecaptcha && grecaptcha.execute) return resolve(true);
+                        var s = document.createElement('script');
+                        s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(key);
+                        s.onload = () => resolve(true);
+                        s.onerror = () => reject(new Error('recaptcha script'));
+                        document.head.appendChild(s);
+                    })", siteKey);
+                    await page.WaitForFunctionAsync(
+                        "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                        new WaitForFunctionOptions { Timeout = 10000 });
+                }
+
+                var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
+                    await new Promise(r => grecaptcha.ready(r));
+                    return await grecaptcha.execute(siteKey, { action: 'submit' });
+                }", siteKey);
+
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    _logger.LogWarning("ANDE PDF: token reCAPTCHA vacío");
+                    return null;
+                }
+
+                _logger.LogInformation("ANDE PDF: reCAPTCHA OK (len={Len})", token.Length);
+                return token;
+            }
+            finally
+            {
+                PdfBrowserLock.Release();
+            }
         }
 
         private static bool EsPdfBytes(byte[]? bytes) =>
