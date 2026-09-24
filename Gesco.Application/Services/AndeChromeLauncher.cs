@@ -78,9 +78,15 @@ namespace Gesco.Application.Services
             var exe = FindSystemBrowser();
             if (string.IsNullOrWhiteSpace(exe))
             {
-                var fetcher = new BrowserFetcher();
-                await fetcher.DownloadAsync();
-                logger?.LogInformation("ANDE Chrome: usando Chromium descargado por PuppeteerSharp");
+                var cacheDir = Environment.GetEnvironmentVariable("PUPPETEER_CACHE_DIR");
+                if (string.IsNullOrWhiteSpace(cacheDir))
+                    cacheDir = Path.Combine(Path.GetTempPath(), "puppeteer-chrome");
+                Directory.CreateDirectory(cacheDir);
+
+                var fetcher = new BrowserFetcher(new BrowserFetcherOptions { Path = cacheDir });
+                var installed = await fetcher.DownloadAsync();
+                exe = installed.GetExecutablePath();
+                logger?.LogInformation("ANDE Chrome: usando Chromium descargado en {Exe}", exe);
             }
             else
             {

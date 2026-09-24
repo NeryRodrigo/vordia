@@ -24,6 +24,9 @@ services:
       # Credenciales de correo: se definen en el archivo .env de cada servidor (ver .env.example)
       - EmailSettings__SenderEmail=${EMAIL_SENDER:-}
       - EmailSettings__AppPassword=${EMAIL_APP_PASSWORD:-}
+      - CHROME_PATH=/usr/bin/chromium
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+      - PUPPETEER_CACHE_DIR=/tmp/puppeteer-chrome
     depends_on:
       - db
     ports:
