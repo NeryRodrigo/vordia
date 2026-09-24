@@ -116,6 +116,7 @@ namespace Gesco.Application.Services
                     var opts = new LaunchOptions
                     {
                         Headless = headless,
+                        HeadlessMode = headless ? HeadlessMode.True : HeadlessMode.False,
                         DefaultViewport = new ViewPortOptions { Width = 1366, Height = 900 },
                         Args = LaunchArgs,
                         Timeout = 60000
