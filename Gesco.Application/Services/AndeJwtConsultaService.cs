@@ -42,6 +42,7 @@ namespace Gesco.Application.Services
         private const string AccederUrl = "https://prod2.ande.gov.py:8581/sigaWs/api/registroUnico/v2/acceder";
         private const string SituacionUrl = "https://prod2.ande.gov.py:8581/sigaWs/api/miCuenta/v3/suministro/situacionActual";
         private const string UltimasUrl = "https://prod2.ande.gov.py:8581/sigaWs/api/miCuenta/v3/suministro/ultimasFacturas";
+        private const string MiCuentaBase = "https://prod2.ande.gov.py:8581/sigaWs/api/miCuenta/";
         private const string OpenApiBase = "https://prod2.ande.gov.py:8581/sigaWs/api/open/";
         private const string PortalUrl = "https://www.ande.gov.py/servicios/";
 
@@ -323,25 +324,6 @@ namespace Gesco.Application.Services
 
                 kwfx = _kwfxToken;
 
-                // URL exacta del comprobante elegido en el modal
-                if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
-                {
-                    var f = FormatearFechaFacturaAnde(fFact);
-                    var qs = $"nro_nis={nisLimpio}&sec_nis={secNis}&sec_rec={secRec}&f_fact={f}";
-                    var elec = electronica ?? true;
-                    urls.Add(OpenApiBase + (elec ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs);
-                    urls.Add(OpenApiBase + (!elec ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs);
-                }
-
-                if (esPenultima)
-                {
-                    urls.Add(OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
-                    urls.Add(OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nisLimpio}");
-                }
-
-                urls.Add(OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
-                urls.Add(OpenApiBase + $"v4/suministro/ultimaFacturaPendientePdf?nis={nisLimpio}");
-
                 var situacionTxt = await PostFormAsync(SituacionUrl, new Dictionary<string, string>
                 {
                     ["kwfxtoken"] = _kwfxToken!,
@@ -349,27 +331,50 @@ namespace Gesco.Application.Services
                 }, ct);
 
                 if (!EsBloqueoRadware(situacionTxt) && !string.IsNullOrWhiteSpace(situacionTxt))
-                    urls.AddRange(ConstruirUrlsPdfDesdeSituacion(nisLimpio, situacionTxt));
-
-                if (!esPenultima)
                 {
-                    urls.Add(OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
-                    urls.Add(OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nisLimpio}");
+                    CompletarParamsDesdeSituacion(situacionTxt, origenNorm, ref secNis, ref secRec, ref fFact);
+                    urls.AddRange(ConstruirUrlsPdfDesdeSituacion(nisLimpio, situacionTxt));
                 }
+
+                urls.InsertRange(0, ConstruirUrlsPdfComprobante(nisLimpio, secNis, secRec, fFact, electronica ?? true, esPenultima));
             }
             finally
             {
                 Gate.Release();
             }
 
-            var candidatas = urls.Distinct().Take(3).ToList();
+            var candidatas = urls.Distinct().Take(6).ToList();
 
-            // 1) HTTP directo (sin Chrome). Cubre ultima y penultima en pocos segundos.
+            // 1) HTTP autenticado (miCuenta / open). Sin Chrome.
             foreach (var url in candidatas)
             {
                 _logger.LogInformation("ANDE PDF HTTP: {Url}", url);
                 var pdfHttp = await TryDescargarPdfAsync(url, ct, null);
                 if (pdfHttp != null) return pdfHttp;
+            }
+
+            if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec))
+            {
+                var f = FormatearFechaFacturaAnde(fFact ?? "");
+                var form = new Dictionary<string, string>
+                {
+                    ["kwfxtoken"] = kwfx ?? "",
+                    ["nis"] = nisLimpio,
+                    ["nro_nis"] = nisLimpio,
+                    ["sec_nis"] = secNis!,
+                    ["sec_rec"] = secRec!,
+                    ["f_fact"] = f
+                };
+                foreach (var postUrl in new[]
+                {
+                    MiCuentaBase + "v5/suministro/facturaElectronicaPdf",
+                    MiCuentaBase + "v3/suministro/facturaElectronicaPdf"
+                })
+                {
+                    _logger.LogInformation("ANDE PDF POST: {Url}", postUrl);
+                    var pdfPost = await TryDescargarPdfPostAsync(postUrl, form, ct);
+                    if (pdfPost != null) return pdfPost;
+                }
             }
 
             // 2) Chrome: el recapt de ANDE solo vale en XHR del portal, no en HTTP del servidor.
@@ -427,8 +432,8 @@ namespace Gesco.Application.Services
                 var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
                 if (!EsPdfBytes(bytes))
                 {
-                    var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 120));
-                    _logger.LogDebug("ANDE PDF respuesta no-PDF ({Len}): {Preview}", bytes.Length, preview);
+                    var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 160));
+                    _logger.LogWarning("ANDE PDF GET no-PDF {Status} ({Len}): {Preview}", (int)resp.StatusCode, bytes.Length, preview);
                     return null;
                 }
 
@@ -759,6 +764,123 @@ namespace Gesco.Application.Services
             && bytes[1] == (byte)'P'
             && bytes[2] == (byte)'D'
             && bytes[3] == (byte)'F';
+
+        private static IEnumerable<string> ConstruirUrlsPdfComprobante(
+            string nis,
+            string? secNis,
+            string? secRec,
+            string? fFact,
+            bool electronica,
+            bool esPenultima)
+        {
+            if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
+            {
+                var f = FormatearFechaFacturaAnde(fFact);
+                var qs = $"nro_nis={nis}&sec_nis={secNis}&sec_rec={secRec}&f_fact={f}";
+                yield return MiCuentaBase + (electronica ? "v5/suministro/facturaElectronicaPdf?" : "v3/suministro/facturaPdf?") + qs;
+                yield return MiCuentaBase + (!electronica ? "v5/suministro/facturaElectronicaPdf?" : "v3/suministro/facturaPdf?") + qs;
+                yield return OpenApiBase + (electronica ? "v5/suministro/facturaElectronicaPdf?" : "v4/suministro/facturaPdf?") + qs;
+            }
+
+            if (esPenultima)
+            {
+                yield return MiCuentaBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nis}";
+                yield return MiCuentaBase + $"v3/suministro/penultimaFacturaElectronicaPendientePdf?nis={nis}";
+                yield return OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nis}";
+                yield return OpenApiBase + $"v4/suministro/penultimaFacturaPendientePdf?nis={nis}";
+            }
+
+            yield return MiCuentaBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nis}";
+            yield return MiCuentaBase + $"v3/suministro/ultimaFacturaElectronicaPendientePdf?nis={nis}";
+            yield return OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nis}";
+            yield return OpenApiBase + $"v4/suministro/ultimaFacturaPendientePdf?nis={nis}";
+        }
+
+        private static void CompletarParamsDesdeSituacion(
+            string situacionTxt,
+            string origen,
+            ref string? secNis,
+            ref string? secRec,
+            ref string? fFact)
+        {
+            if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
+                return;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(situacionTxt);
+                if (!doc.RootElement.TryGetProperty("resultado", out var res))
+                    return;
+
+                var props = string.Equals(origen, "penultima", StringComparison.OrdinalIgnoreCase)
+                    ? new[] { "facturaPenultima", "facturaDatos", "facturaPagada" }
+                    : new[] { "facturaDatos", "facturaPenultima", "facturaPagada" };
+
+                foreach (var prop in props)
+                {
+                    if (!res.TryGetProperty(prop, out var fact) || fact.ValueKind != JsonValueKind.Object)
+                        continue;
+                    if (!fact.EnumerateObject().Any())
+                        continue;
+
+                    JsonElement? recibo = fact.TryGetProperty("recibo", out var rec) && rec.ValueKind == JsonValueKind.Object
+                        ? rec
+                        : null;
+                    var a = TextoCampoJson(fact, "sec_nis", "secNis", "secnis")
+                        ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_nis", "secNis") : null);
+                    var b = TextoCampoJson(fact, "sec_rec", "secRec", "secrec", "nroRecibo")
+                        ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "sec_rec", "secRec", "nroRecibo") : null);
+                    var c = TextoCampoJson(fact, "fechaFacturacion", "f_fact", "fechaEmision", "emision")
+                        ?? (recibo.HasValue ? TextoCampoJson(recibo.Value, "fechaFacturacion", "f_fact", "emision") : null);
+
+                    if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+                        continue;
+
+                    secNis ??= a;
+                    secRec ??= b;
+                    if (string.IsNullOrWhiteSpace(fFact))
+                        fFact = c;
+                    return;
+                }
+            }
+            catch
+            {
+                /* situacion no parseable */
+            }
+        }
+
+        private async Task<byte[]?> TryDescargarPdfPostAsync(
+            string url,
+            Dictionary<string, string> data,
+            CancellationToken ct)
+        {
+            try
+            {
+                using var form = new FormUrlEncodedContent(data);
+                using var req = new HttpRequestMessage(HttpMethod.Post, url) { Content = form };
+                req.Headers.TryAddWithoutValidation("Accept", "application/pdf,*/*");
+                req.Headers.TryAddWithoutValidation("Referer", "https://www.ande.gov.py/servicios/");
+                if (!string.IsNullOrWhiteSpace(_jwt))
+                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _jwt);
+
+                using var resp = await AndeHttp.SendAsync(req, ct);
+                var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+                if (EsPdfBytes(bytes))
+                {
+                    _logger.LogInformation("ANDE PDF POST OK ({Len} bytes) {Url}", bytes.Length, url);
+                    return bytes;
+                }
+
+                var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 160));
+                _logger.LogWarning("ANDE PDF POST no-PDF {Status} ({Len}): {Preview}", (int)resp.StatusCode, bytes.Length, preview);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "ANDE PDF POST falló {Url}", url);
+                return null;
+            }
+        }
 
         private static IEnumerable<string> ConstruirUrlsPdfDesdeSituacion(string nis, string situacionTxt)
         {
