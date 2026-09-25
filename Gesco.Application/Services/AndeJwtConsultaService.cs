@@ -223,7 +223,10 @@ namespace Gesco.Application.Services
             if (!string.IsNullOrWhiteSpace(fFact))
                 fields["f_fact"] = FormatearFechaFacturaAnde(fFact);
 
-            return new { action, fields };
+            // El API open/ de ANDE solo acepta GET (POST = HTTP 405).
+            var qs = string.Join("&", fields.Select(kv =>
+                $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
+            return new { url = $"{action}?{qs}", action, fields };
         }
 
         public async Task<(bool Ok, string Mensaje, bool Renovado)> AsegurarJwtAsync(CancellationToken ct = default)
