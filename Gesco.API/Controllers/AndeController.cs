@@ -109,7 +109,12 @@ namespace Gesco.API.Controllers
                     nis, secNis, secRec, fFact, electronica, origen, recapt);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
-                    return NotFound("ANDE bloquea el PDF oficial desde el servidor. Usá Ver Comprobante en el navegador.");
+                    return StatusCode(503, new
+                    {
+                        ok = false,
+                        andeConFallas = true,
+                        mensaje = "ANDE con fallas"
+                    });
 
                 return File(pdfBytes, "application/pdf", $"Factura_ANDE_{nis}.pdf");
             }
