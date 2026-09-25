@@ -1400,6 +1400,9 @@ namespace Gesco.Application.Services
                 url = openBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}";
             }
 
+            if (!url.Contains("clientKey=", StringComparison.OrdinalIgnoreCase))
+                url += (url.Contains('?') ? "&" : "?") + "clientKey=iBLQWFskMfSF5oGhD2a1UYNZyuYo0tdh";
+
             await _portalLock.WaitAsync();
             try
             {
@@ -1435,7 +1438,7 @@ namespace Gesco.Application.Services
                         await page.GoToAsync(portalUrl, new NavigationOptions
                         {
                             WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
-                            Timeout = 20000
+                            Timeout = 60000
                         });
                     }
                     catch (Exception exNav)
@@ -1456,20 +1459,44 @@ namespace Gesco.Application.Services
                     }", kwfxToken);
                 }
 
+                var tieneGrecaptcha = false;
                 try
                 {
                     await page.WaitForFunctionAsync(
                         "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                        new WaitForFunctionOptions { Timeout = 8000 });
-            }
-            catch (Exception ex)
-            {
-                    _logger.LogWarning(ex, "ANDE portal PDF: sin CLAVE_SITIO_WEB/grecaptcha");
-                    return null;
+                        new WaitForFunctionOptions { Timeout = 12000 });
+                    tieneGrecaptcha = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "ANDE portal PDF: grecaptcha no cargó; se inyecta el script");
                 }
 
                 var claveUsada = await page.EvaluateFunctionAsync<string>(
                     $"() => (typeof CLAVE_SITIO_WEB === 'string' && CLAVE_SITIO_WEB) ? CLAVE_SITIO_WEB : '{AndeRecaptchaSiteKey}'");
+
+                if (!tieneGrecaptcha)
+                {
+                    try
+                    {
+                        await page.EvaluateFunctionAsync(@"(key) => new Promise((resolve, reject) => {
+                            if (window.grecaptcha && grecaptcha.execute) return resolve(true);
+                            var s = document.createElement('script');
+                            s.src = 'https://www.google.com/recaptcha/api.js?render=' + encodeURIComponent(key);
+                            s.onload = () => resolve(true);
+                            s.onerror = () => reject(new Error('recaptcha script'));
+                            document.head.appendChild(s);
+                        })", claveUsada);
+                        await page.WaitForFunctionAsync(
+                            "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
+                            new WaitForFunctionOptions { Timeout = 12000 });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "ANDE portal PDF: no se pudo inyectar grecaptcha");
+                        return null;
+                    }
+                }
 
                 var token = await page.EvaluateFunctionAsync<string>(@"async (siteKey) => {
                     await new Promise(r => grecaptcha.ready(r));
