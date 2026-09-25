@@ -7,9 +7,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PuppeteerSharp;
-using QuestPDF.Fluent;
-using QuestPDF.Helpers;
-using QuestPDF.Infrastructure;
 using Gesco.Application.DTOs;
 using Gesco.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
@@ -20,7 +17,6 @@ namespace Gesco.Application.Services
     public interface IAndeScrapingService
     {
         Task<(decimal Deuda, int Kw)> ConsultarConsumoAsync(string nis);
-        Task<byte[]> DescargarFacturaPdfAsync(string nis, string inquilinoNombre, string duplex);
         Task<AndeConsultaResultadoDto> ConsultarEstadoAndeAsync(string nis);
         /// <summary>Abre Chrome con login ANDE; espera Acceder; minimiza. No consulta NIS.</summary>
         Task<(bool Ok, string Mensaje, bool YaEstabaLogueado)> AsegurarSesionAsync();
@@ -56,7 +52,6 @@ namespace Gesco.Application.Services
             _logger = logger;
             _scopeFactory = scopeFactory;
             _creds = creds;
-            QuestPDF.Settings.License = LicenseType.Community;
         }
 
         private static readonly System.Threading.SemaphoreSlim _portalLock = new(1, 1);
@@ -1537,113 +1532,6 @@ namespace Gesco.Application.Services
             {
                 _portalLock.Release();
             }
-        }
-
-        public async Task<byte[]> DescargarFacturaPdfAsync(string nis, string inquilinoNombre, string duplex)
-        {
-            var oficial = await DescargarFacturaPdfOficialPortalAsync(nis);
-            if (oficial != null && oficial.Length > 0)
-                return oficial;
-
-            _logger.LogWarning("ANDE: PDF oficial no disponible, usando fallback interno para NIS {Nis}", nis);
-            return GenerarPdfFacturaFallback(nis, inquilinoNombre, duplex);
-        }
-
-        private byte[] GenerarPdfFacturaFallback(string nis, string inquilinoNombre, string duplex)
-        {
-            var deudaMock = ConsultarConsumoAsync(nis).GetAwaiter().GetResult();
-            
-            return Document.Create(container =>
-            {
-                container.Page(page =>
-                {
-                    page.Size(PageSizes.A4);
-                    page.Margin(2, Unit.Centimetre);
-                    page.PageColor(Colors.White);
-                    page.DefaultTextStyle(x => x.FontSize(11));
-
-                    page.Header().Element(ComposeHeader);
-                    
-                    void ComposeHeader(IContainer containerHeader)
-                    {
-                        containerHeader.Column(col =>
-                        {
-                            col.Item().Text("ADMINISTRACIÃ“N NACIONAL DE ELECTRICIDAD").SemiBold().FontSize(18).FontColor(Colors.Blue.Darken2);
-                            col.Item().Text("Factura de Energia Electrica (Comprobante Digital)").FontSize(14).FontColor(Colors.Grey.Medium);
-                            col.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
-                        });
-                    }
-
-                    page.Content().PaddingVertical(20).Column(column =>
-                    {
-                        column.Spacing(20);
-
-                        // Datos del Cliente
-                        column.Item().Row(row =>
-                        {
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().Text("Datos del Suministro").SemiBold().FontSize(14);
-                                col.Item().Text($"NIS: {nis}").Bold();
-                                col.Item().Text($"Titular: {inquilinoNombre ?? "GESCO CONDOMINIOS"}");
-                                col.Item().Text($"Direccion: Duplex {duplex} - Condominio GESCO");
-                            });
-
-                            row.RelativeItem().Column(col =>
-                            {
-                                col.Item().Text("Datos de Facturacion").SemiBold().FontSize(14);
-                                col.Item().Text($"Fecha Emision: {DateTime.Now:dd/MM/yyyy}");
-                                col.Item().Text($"Vencimiento: {DateTime.Now:dd/MM/yyyy}");
-                                col.Item().Text("Estado: PAGADO").Bold().FontColor(Colors.Green.Medium);
-                            });
-                        });
-
-                        // Tabla de Consumo
-                        column.Item().Table(table =>
-                        {
-                            table.ColumnsDefinition(columns =>
-                            {
-                                columns.RelativeColumn(3);
-                                columns.RelativeColumn();
-                                columns.RelativeColumn();
-                                columns.RelativeColumn();
-                            });
-
-                            table.Header(header =>
-                            {
-                                header.Cell().Text("Concepto").SemiBold();
-                                header.Cell().AlignRight().Text("Cantidad").SemiBold();
-                                header.Cell().AlignRight().Text("Precio Unit.").SemiBold();
-                                header.Cell().AlignRight().Text("Total").SemiBold();
-                                header.Cell().ColumnSpan(4).PaddingTop(5).BorderBottom(1).BorderColor(Colors.Black);
-                            });
-
-                            table.Cell().PaddingTop(10).Text("Cargo Fijo Mantenimiento Red");
-                            table.Cell().PaddingTop(10).AlignRight().Text("1");
-                            table.Cell().PaddingTop(10).AlignRight().Text("85.000");
-                            table.Cell().PaddingTop(10).AlignRight().Text("85.000");
-
-                            table.Cell().PaddingTop(5).Text("Consumo de Energia Activa");
-                            table.Cell().PaddingTop(5).AlignRight().Text($"{deudaMock.Kw} kW");
-                            table.Cell().PaddingTop(5).AlignRight().Text("450");
-                            table.Cell().PaddingTop(5).AlignRight().Text($"{(deudaMock.Kw * 450):N0}");
-                        });
-
-                        column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
-
-                        column.Item().AlignRight().Text($"TOTAL A PAGAR: Gs. {deudaMock.Deuda:N0}")
-                            .FontSize(16).SemiBold();
-                    });
-
-                    page.Footer().AlignCenter().Text(x =>
-                    {
-                        x.Span("Documento generado mediante integracion API ANDE/GESCO - ");
-                        x.CurrentPageNumber();
-                        x.Span(" / ");
-                        x.TotalPages();
-                    });
-                });
-            }).GeneratePdf();
         }
 
         public async Task<AndeConsultaResultadoDto> ConsultarEstadoAndeAsync(string nis)
