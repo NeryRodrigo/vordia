@@ -420,20 +420,20 @@ namespace Gesco.Application.Services
             if (!string.IsNullOrWhiteSpace(recapt))
                 form["recapt"] = recapt!;
 
+            // Open/ solo acepta GET (POST = 405). En GCP el GET open/ da 404/captcha.
+            // situacionActual (miCuenta POST) sí funciona: el PDF se pide por ese canal.
+            var enServidorLinux = OperatingSystem.IsLinux();
             var postUrls = new List<string>();
             if (esPenultima)
             {
-                postUrls.Add(OpenApiBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
                 postUrls.Add(MiCuentaBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
                 postUrls.Add(MiCuentaBase + "v3/suministro/penultimaFacturaElectronicaPendientePdf");
             }
             if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec))
             {
-                postUrls.Add(OpenApiBase + "v5/suministro/facturaElectronicaPdf");
                 postUrls.Add(MiCuentaBase + "v5/suministro/facturaElectronicaPdf");
                 postUrls.Add(MiCuentaBase + "v3/suministro/facturaElectronicaPdf");
             }
-            postUrls.Add(OpenApiBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
             postUrls.Add(MiCuentaBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
             postUrls.Add(MiCuentaBase + "v3/suministro/ultimaFacturaElectronicaPendientePdf");
 
@@ -444,26 +444,33 @@ namespace Gesco.Application.Services
                 if (pdfPost != null) return pdfPost;
             }
 
-            var getUrls = urls
-                .Where(u => u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
-                .Distinct()
-                .ToList();
+            var getUrls = urls.Distinct().ToList();
             if (getUrls.Count == 0)
             {
                 getUrls.Add(esPenultima
                     ? OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}"
                     : OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
+                getUrls.Add(esPenultima
+                    ? MiCuentaBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}"
+                    : MiCuentaBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
             }
 
-            foreach (var getUrl in getUrls)
+            // En Windows (IP PY) el GET open/ baja el KUDE. En Linux/GCP se salta: 404 Tahoma / captcha.
+            var getCandidates = enServidorLinux
+                ? getUrls.Where(u => !u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase)).ToList()
+                : getUrls;
+
+            foreach (var getUrl in getCandidates)
             {
                 var urlKey = AgregarQuery(getUrl, "clientKey", clientKey);
                 var pdfGet = await TryDescargarPdfAsync(urlKey, ct, recapt);
                 if (pdfGet != null) return pdfGet;
             }
 
-            var chromeUrl = AgregarQuery(getUrls[0], "clientKey", clientKey);
-            _logger.LogInformation("ANDE PDF: intentando Chrome + reCAPTCHA {Url}", chromeUrl);
+            var chromeBase = getUrls.FirstOrDefault(u => u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
+                ?? getUrls[0];
+            var chromeUrl = AgregarQuery(chromeBase, "clientKey", clientKey);
+            _logger.LogInformation("ANDE PDF: Chrome + reCAPTCHA {Url} (linux={Linux})", chromeUrl, enServidorLinux);
             var pdfChrome = await DescargarPdfConRecaptchaBrowserAsync(chromeUrl, kwfx, ct);
             if (pdfChrome != null) return pdfChrome;
 
@@ -755,8 +762,9 @@ namespace Gesco.Application.Services
             {
                 var pages = await _pdfBrowser!.PagesAsync();
                 _pdfPage = pages.FirstOrDefault() ?? await _pdfBrowser.NewPageAsync();
-                await _pdfPage.SetUserAgentAsync(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+                await _pdfPage.SetUserAgentAsync(OperatingSystem.IsLinux()
+                    ? "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
                 try
                 {
                     await _pdfPage.EvaluateFunctionOnNewDocumentAsync(@"() => {
@@ -774,7 +782,7 @@ namespace Gesco.Application.Services
                     await _pdfPage.GoToAsync(PortalUrl, new NavigationOptions
                     {
                         WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
-                        Timeout = 20000
+                        Timeout = 60000
                     });
                 }
                 catch (Exception ex)
@@ -794,7 +802,7 @@ namespace Gesco.Application.Services
             {
                 await page.WaitForFunctionAsync(
                     "() => typeof grecaptcha !== 'undefined' && typeof grecaptcha.execute === 'function'",
-                    new WaitForFunctionOptions { Timeout = 8000 });
+                    new WaitForFunctionOptions { Timeout = 15000 });
                 tieneGrecaptcha = true;
             }
             catch
@@ -1057,6 +1065,8 @@ namespace Gesco.Application.Services
             var fFact = FormatearFechaFacturaAnde(fFactRaw);
             // Portal ANDE no encodea f_fact (deja los /); sec_* y nis sí van crudos en JS.
             var qs = $"nro_nis={nis}&sec_nis={secNis}&sec_rec={secRec}&f_fact={fFact}";
+            yield return MiCuentaBase + "v5/suministro/facturaElectronicaPdf?" + qs;
+            yield return MiCuentaBase + "v3/suministro/facturaPdf?" + qs;
             yield return OpenApiBase + "v5/suministro/facturaElectronicaPdf?" + qs;
             yield return OpenApiBase + "v4/suministro/facturaPdf?" + qs;
         }

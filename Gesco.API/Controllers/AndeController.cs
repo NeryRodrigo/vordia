@@ -109,6 +109,13 @@ namespace Gesco.API.Controllers
                     nis, secNis, secRec, fFact, electronica, origen, recapt);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
+                {
+                    var kwfx = _andeJwtConsultaService.GetKwfxTokenActual();
+                    pdfBytes = await _andeScrapingService.DescargarFacturaPdfOficialPortalAsync(
+                        nis, null, secNis, secRec, fFact, electronica ?? true, kwfx, origen);
+                }
+
+                if (pdfBytes == null || pdfBytes.Length == 0)
                     return StatusCode(503, new
                     {
                         ok = false,

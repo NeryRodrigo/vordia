@@ -24,6 +24,7 @@ namespace Gesco.Application.Services
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-extensions",
+            "--lang=es-PY,es",
             "--window-size=1366,900"
         };
 
