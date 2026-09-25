@@ -103,13 +103,12 @@ namespace Gesco.API.Controllers
                         mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
                     });
 
-                // HTTP rápido; si ANDE pide reCAPTCHA, Chrome hace el XHR en el portal (no HTTP del servidor).
                 await _andeJwtConsultaService.AsegurarJwtAsync();
                 var pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
                     nis, secNis, secRec, fFact, electronica, origen);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
-                    return NotFound("No se pudo obtener el PDF oficial de la ANDE para este NIS. Reiniciá la API, ejecutá Consultar Saldos ANDE y reintentá.");
+                    return NotFound("ANDE bloquea el PDF oficial desde el servidor. Usá Ver Comprobante en el navegador.");
 
                 return File(pdfBytes, "application/pdf", $"Factura_ANDE_{nis}.pdf");
             }
