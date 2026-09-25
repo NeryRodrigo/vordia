@@ -343,58 +343,40 @@ namespace Gesco.Application.Services
                 Gate.Release();
             }
 
-            var candidatas = urls.Distinct().Take(6).ToList();
-
-            // 1) HTTP autenticado (miCuenta / open). Sin Chrome.
-            foreach (var url in candidatas)
+            // GET open/ y Chrome XHR reciben "Make sure Captcha Page" (Radware).
+            // situacionActual ya funciona por POST + kwfxtoken: el PDF va por el mismo canal.
+            var form = new Dictionary<string, string>
             {
-                _logger.LogInformation("ANDE PDF HTTP: {Url}", url);
-                var pdfHttp = await TryDescargarPdfAsync(url, ct, null);
-                if (pdfHttp != null) return pdfHttp;
-            }
+                ["kwfxtoken"] = kwfx ?? "",
+                ["nis"] = nisLimpio,
+                ["nro_nis"] = nisLimpio
+            };
+            if (!string.IsNullOrWhiteSpace(secNis))
+                form["sec_nis"] = secNis!;
+            if (!string.IsNullOrWhiteSpace(secRec))
+                form["sec_rec"] = secRec!;
+            if (!string.IsNullOrWhiteSpace(fFact))
+                form["f_fact"] = FormatearFechaFacturaAnde(fFact);
 
+            var postUrls = new List<string>();
+            if (esPenultima)
+            {
+                postUrls.Add(MiCuentaBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
+                postUrls.Add(MiCuentaBase + "v3/suministro/penultimaFacturaElectronicaPendientePdf");
+            }
             if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec))
             {
-                var f = FormatearFechaFacturaAnde(fFact ?? "");
-                var form = new Dictionary<string, string>
-                {
-                    ["kwfxtoken"] = kwfx ?? "",
-                    ["nis"] = nisLimpio,
-                    ["nro_nis"] = nisLimpio,
-                    ["sec_nis"] = secNis!,
-                    ["sec_rec"] = secRec!,
-                    ["f_fact"] = f
-                };
-                foreach (var postUrl in new[]
-                {
-                    MiCuentaBase + "v5/suministro/facturaElectronicaPdf",
-                    MiCuentaBase + "v3/suministro/facturaElectronicaPdf"
-                })
-                {
-                    _logger.LogInformation("ANDE PDF POST: {Url}", postUrl);
-                    var pdfPost = await TryDescargarPdfPostAsync(postUrl, form, ct);
-                    if (pdfPost != null) return pdfPost;
-                }
+                postUrls.Add(MiCuentaBase + "v5/suministro/facturaElectronicaPdf");
+                postUrls.Add(MiCuentaBase + "v3/suministro/facturaElectronicaPdf");
             }
+            postUrls.Add(MiCuentaBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
+            postUrls.Add(MiCuentaBase + "v3/suministro/ultimaFacturaElectronicaPendientePdf");
 
-            // 2) Chrome: el recapt de ANDE solo vale en XHR del portal, no en HTTP del servidor.
-            foreach (var url in candidatas.Take(2))
+            foreach (var postUrl in postUrls.Distinct())
             {
-                try
-                {
-                    _logger.LogInformation("ANDE PDF Chrome XHR: {Url}", url);
-                    var pdf = await DescargarPdfConRecaptchaBrowserAsync(url, kwfx, ct);
-                    if (pdf != null) return pdf;
-                }
-                catch (ProcessException ex)
-                {
-                    _logger.LogWarning("ANDE PDF: Chrome no disponible ({Msg})", ex.Message);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "ANDE PDF Chrome XHR falló");
-                }
+                _logger.LogInformation("ANDE PDF POST: {Url}", postUrl);
+                var pdfPost = await TryDescargarPdfPostAsync(postUrl, form, ct);
+                if (pdfPost != null) return pdfPost;
             }
 
             _logger.LogInformation("ANDE PDF: sin resultado para NIS {Nis}", nisLimpio);
@@ -765,6 +747,59 @@ namespace Gesco.Application.Services
             && bytes[2] == (byte)'D'
             && bytes[3] == (byte)'F';
 
+        private static byte[]? ExtraerPdfDesdeJson(byte[] bytes)
+        {
+            if (bytes.Length < 2 || bytes[0] != (byte)'{')
+                return null;
+            try
+            {
+                using var doc = JsonDocument.Parse(bytes);
+                foreach (var key in new[] { "pdf", "archivo", "contenido", "base64", "kude", "factura", "data" })
+                {
+                    if (!doc.RootElement.TryGetProperty(key, out var el))
+                        continue;
+                    var pdf = BytesDesdeNodoJson(el);
+                    if (pdf != null) return pdf;
+                }
+                if (doc.RootElement.TryGetProperty("resultado", out var res) && res.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var key in new[] { "pdf", "archivo", "contenido", "base64", "kude" })
+                    {
+                        if (!res.TryGetProperty(key, out var el))
+                            continue;
+                        var pdf = BytesDesdeNodoJson(el);
+                        if (pdf != null) return pdf;
+                    }
+                }
+            }
+            catch
+            {
+                /* no es JSON útil */
+            }
+            return null;
+        }
+
+        private static byte[]? BytesDesdeNodoJson(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.String)
+                return null;
+            var s = (el.GetString() ?? "").Trim();
+            if (s.Length < 20)
+                return null;
+            var comma = s.IndexOf(',');
+            if (s.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && comma > 0)
+                s = s[(comma + 1)..];
+            try
+            {
+                var raw = Convert.FromBase64String(s);
+                return EsPdfBytes(raw) ? raw : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static IEnumerable<string> ConstruirUrlsPdfComprobante(
             string nis,
             string? secNis,
@@ -871,7 +906,14 @@ namespace Gesco.Application.Services
                     return bytes;
                 }
 
-                var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 160));
+                var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 200));
+                var desdeJson = ExtraerPdfDesdeJson(bytes);
+                if (desdeJson != null)
+                {
+                    _logger.LogInformation("ANDE PDF POST JSON OK ({Len} bytes) {Url}", desdeJson.Length, url);
+                    return desdeJson;
+                }
+
                 _logger.LogWarning("ANDE PDF POST no-PDF {Status} ({Len}): {Preview}", (int)resp.StatusCode, bytes.Length, preview);
                 return null;
             }
