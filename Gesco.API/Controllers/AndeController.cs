@@ -91,7 +91,8 @@ namespace Gesco.API.Controllers
             [FromQuery] string? secRec = null,
             [FromQuery] string? fFact = null,
             [FromQuery] bool? electronica = null,
-            [FromQuery] string? origen = null)
+            [FromQuery] string? origen = null,
+            [FromHeader(Name = "X-Ande-Recapt")] string? recapt = null)
         {
             try
             {
@@ -105,7 +106,7 @@ namespace Gesco.API.Controllers
 
                 await _andeJwtConsultaService.AsegurarJwtAsync();
                 var pdfBytes = await _andeJwtConsultaService.DescargarFacturaPdfOficialAsync(
-                    nis, secNis, secRec, fFact, electronica, origen);
+                    nis, secNis, secRec, fFact, electronica, origen, recapt);
 
                 if (pdfBytes == null || pdfBytes.Length == 0)
                     return NotFound("ANDE bloquea el PDF oficial desde el servidor. Usá Ver Comprobante en el navegador.");
