@@ -124,6 +124,32 @@ namespace Gesco.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Datos para pedir el KUDE desde el navegador del usuario (IP de Paraguay),
+        /// cuando el servidor no puede bajar el PDF.
+        /// </summary>
+        [HttpGet("comprobante-oficial/{nis}")]
+        public async Task<IActionResult> GetComprobanteOficial(
+            string nis,
+            [FromQuery] string? secNis = null,
+            [FromQuery] string? secRec = null,
+            [FromQuery] string? fFact = null,
+            [FromQuery] bool? electronica = null,
+            [FromQuery] string? origen = null)
+        {
+            if (!_creds.EstaConfigurado())
+                return StatusCode(401, new
+                {
+                    ok = false,
+                    requiereCredenciales = true,
+                    mensaje = "Faltan credenciales ANDE. Configurá usuario y contraseña de Mi Cuenta."
+                });
+
+            await _andeJwtConsultaService.AsegurarJwtAsync();
+            return Ok(_andeJwtConsultaService.ArmarPedidoComprobanteOficial(
+                nis, secNis, secRec, fFact, electronica, origen));
+        }
+
         [HttpGet("consumo/{nis}")]
         public async Task<IActionResult> GetConsumoReal(string nis)
         {

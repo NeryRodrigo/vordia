@@ -18,6 +18,14 @@ namespace Gesco.Application.Services
         Task<AndeConsultaResultadoDto> ConsultarSaldoAsync(string nis, CancellationToken ct = default);
         /// <summary>Token kwfx de la sesión HTTP actual (si vigente).</summary>
         string? GetKwfxTokenActual();
+        /// <summary>URL y campos para pedir el KUDE oficial desde el navegador (misma sesión JWT).</summary>
+        object ArmarPedidoComprobanteOficial(
+            string nis,
+            string? secNis = null,
+            string? secRec = null,
+            string? fFact = null,
+            bool? electronica = null,
+            string? origen = null);
         /// <summary>Descarga el KUDE/PDF oficial de ANDE. Opcionalmente con params de un comprobante concreto.</summary>
         Task<byte[]?> DescargarFacturaPdfOficialAsync(
             string nis,
@@ -176,6 +184,47 @@ namespace Gesco.Application.Services
         }
 
         public string? GetKwfxTokenActual() => TokenVigente() ? _kwfxToken : null;
+
+        public object ArmarPedidoComprobanteOficial(
+            string nis,
+            string? secNis = null,
+            string? secRec = null,
+            string? fFact = null,
+            bool? electronica = null,
+            string? origen = null)
+        {
+            var nisLimpio = new string((nis ?? "").Where(char.IsDigit).ToArray());
+            var clientKey = _config["AndeConfig:ClientKey"];
+            if (string.IsNullOrWhiteSpace(clientKey))
+                clientKey = ClientKey;
+
+            var esPenultima = string.Equals((origen ?? "").Trim(), "penultima", StringComparison.OrdinalIgnoreCase);
+            string action;
+            if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec) && !string.IsNullOrWhiteSpace(fFact))
+                action = OpenApiBase + (electronica == false ? "v4/suministro/facturaPdf" : "v5/suministro/facturaElectronicaPdf");
+            else if (esPenultima)
+                action = OpenApiBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf";
+            else
+                action = OpenApiBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf";
+
+            var fields = new Dictionary<string, string>
+            {
+                ["clientKey"] = clientKey,
+                ["nis"] = nisLimpio,
+                ["nro_nis"] = nisLimpio
+            };
+            var kwfx = GetKwfxTokenActual();
+            if (!string.IsNullOrWhiteSpace(kwfx))
+                fields["kwfxtoken"] = kwfx!;
+            if (!string.IsNullOrWhiteSpace(secNis))
+                fields["sec_nis"] = secNis!;
+            if (!string.IsNullOrWhiteSpace(secRec))
+                fields["sec_rec"] = secRec!;
+            if (!string.IsNullOrWhiteSpace(fFact))
+                fields["f_fact"] = FormatearFechaFacturaAnde(fFact);
+
+            return new { action, fields };
+        }
 
         public async Task<(bool Ok, string Mensaje, bool Renovado)> AsegurarJwtAsync(CancellationToken ct = default)
         {
@@ -1252,9 +1301,8 @@ namespace Gesco.Application.Services
                     try
                     {
                         using var uDoc = JsonDocument.Parse(ultimasTxt);
-                        if (uDoc.RootElement.TryGetProperty("resultado", out var uRes)
-                            && uRes.TryGetProperty("lista", out var lista)
-                            && lista.ValueKind == JsonValueKind.Array)
+                        if (TryGetArrayAnde(uDoc.RootElement, out var lista,
+                                "lista", "facturas", "ultimasFacturas", "comprobantes", "recibos"))
                         {
                             foreach (var item in lista.EnumerateArray())
                                 MapearItemLista(dto, item);
@@ -1266,11 +1314,13 @@ namespace Gesco.Application.Services
                     }
                 }
 
+                SepararDeudaTotalEnImporteDeComprobante(dto.Facturas);
+
                 dto.Facturas = dto.Facturas
                     .GroupBy(f =>
                     {
                         var fecha = FormatearFechaFacturaAnde(
-                            string.IsNullOrWhiteSpace(f.Vencimiento) ? f.Emision : f.Vencimiento);
+                            string.IsNullOrWhiteSpace(f.Emision) ? f.Vencimiento : f.Emision);
                         var estado = (f.Estado ?? "").Contains("Pendiente", StringComparison.OrdinalIgnoreCase)
                             ? "P"
                             : "C";
@@ -1281,6 +1331,8 @@ namespace Gesco.Application.Services
                             !string.IsNullOrWhiteSpace(x.SecNis) && !string.IsNullOrWhiteSpace(x.SecRec))
                         .ThenByDescending(x => !string.IsNullOrWhiteSpace(x.FechaFacturacion))
                         .First())
+                    .OrderByDescending(f => ParseFechaOrdenAnde(f.Emision))
+                    .ThenByDescending(f => ParseFechaOrdenAnde(f.Vencimiento))
                     .ToList();
 
                 dto.SaldoDeuda = dto.Facturas
@@ -1314,6 +1366,12 @@ namespace Gesco.Application.Services
                 dto.FacturasPendientes = dto.Facturas.Count(f =>
                     f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase));
                 dto.EstadoPago = dto.SaldoDeuda > 0 || dto.FacturasPendientes > 0 ? "PENDIENTE DE PAGO" : "AL DÍA";
+                _logger.LogInformation(
+                    "ANDE NIS {Nis}: {N} comprobantes · saldo {Saldo} · {Detalle}",
+                    nis,
+                    dto.Facturas.Count,
+                    dto.SaldoDeuda,
+                    string.Join(" | ", dto.Facturas.Select(f => $"{f.Monto:0} {f.Estado} {f.Emision}")));
                 dto.EstadoConexion = "OK";
                 dto.Vencimiento = dto.Facturas
                     .Where(f => f.Estado.Contains("Pendiente", StringComparison.OrdinalIgnoreCase))
@@ -1379,29 +1437,14 @@ namespace Gesco.Application.Services
             }
 
             decimal monto = 0;
-            if (otros.HasValue)
+            var montoDesdeDeudaTotal = false;
+            if (TryFindNumeroPorNombres(item, NombresImporteComprobante, out monto))
             {
-                foreach (var key in new[] { "deudaTotal", "totalconComision", "totalConComision", "importe", "monto" })
-                {
-                    if (otros.Value.TryGetProperty(key, out var v) && TryDecimal(v, out monto) && monto > 0)
-                        break;
-                }
+                /* importe propio del comprobante */
             }
-            if (monto <= 0)
+            else if (TryFindNumeroPorNombres(item, NombresDeudaAcumulada, out monto))
             {
-                foreach (var key in new[] { "importe", "monto", "total", "impTotal", "importeTotal", "saldo", "importeFacturado" })
-                {
-                    if (item.TryGetProperty(key, out var v) && TryDecimal(v, out monto) && monto > 0)
-                        break;
-                }
-            }
-            if (monto <= 0 && recibo.HasValue)
-            {
-                foreach (var key in new[] { "importe", "monto", "total", "importeTotal" })
-                {
-                    if (recibo.Value.TryGetProperty(key, out var v) && TryDecimal(v, out monto) && monto > 0)
-                        break;
-                }
+                montoDesdeDeudaTotal = monto > 0;
             }
 
             var estadoRaw = "";
@@ -1566,7 +1609,8 @@ namespace Gesco.Application.Services
                 SecNis = secNis,
                 SecRec = secRec,
                 FechaFacturacion = fFact,
-                FacturaElectronica = electronica
+                FacturaElectronica = electronica,
+                MontoDesdeDeudaTotal = montoDesdeDeudaTotal
             });
 
             if (kw.HasValue && dto.ConsumoKw == 0)
@@ -1602,6 +1646,105 @@ namespace Gesco.Application.Services
 
             // Ambiguo: no asumir Pagado (era el bug del desglose)
             return string.IsNullOrWhiteSpace(e) ? "Pendiente de Pago" : e;
+        }
+
+        private static readonly string[] NombresImporteComprobante =
+        {
+            "importe", "importeFacturado", "impTotal", "importeTotal",
+            "montoFactura", "totalFactura", "totalPagar", "totalAPagar",
+            "monto", "total", "valor", "importeGs"
+        };
+
+        private static readonly string[] NombresDeudaAcumulada =
+        {
+            "deudaTotal", "totalconComision", "totalConComision", "deuda_total"
+        };
+
+        private static bool TryFindNumeroPorNombres(JsonElement root, string[] names, out decimal monto)
+        {
+            monto = 0;
+            var stack = new Stack<JsonElement>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                var el = stack.Pop();
+                if (el.ValueKind != JsonValueKind.Object)
+                    continue;
+                foreach (var p in el.EnumerateObject())
+                {
+                    var keyNorm = p.Name.Replace("_", "");
+                    if (names.Any(n =>
+                            string.Equals(n, p.Name, StringComparison.OrdinalIgnoreCase)
+                            || string.Equals(n.Replace("_", ""), keyNorm, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        if (TryDecimal(p.Value, out monto) && monto > 0)
+                            return true;
+                    }
+                    if (p.Value.ValueKind == JsonValueKind.Object)
+                        stack.Push(p.Value);
+                }
+            }
+            return false;
+        }
+
+        private static bool TryGetArrayAnde(JsonElement root, out JsonElement lista, params string[] names)
+        {
+            lista = default;
+            var candidatos = new List<JsonElement> { root };
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("resultado", out var res))
+                candidatos.Add(res);
+            foreach (var nodo in candidatos)
+            {
+                if (nodo.ValueKind != JsonValueKind.Object)
+                    continue;
+                foreach (var p in nodo.EnumerateObject())
+                {
+                    if (p.Value.ValueKind != JsonValueKind.Array)
+                        continue;
+                    if (names.Any(n => string.Equals(n, p.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        lista = p.Value;
+                        return lista.GetArrayLength() > 0;
+                    }
+                }
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// facturaDatos.deudaTotal suele ser la suma de pendientes (330+557=887).
+        /// Si la más reciente vino de deudaTotal, se le resta la anterior.
+        /// </summary>
+        private static void SepararDeudaTotalEnImporteDeComprobante(List<AndeFacturaItemDto> facturas)
+        {
+            var pendientes = facturas
+                .Where(f => (f.Estado ?? "").Contains("Pendiente", StringComparison.OrdinalIgnoreCase) && f.Monto > 0)
+                .OrderByDescending(f => ParseFechaOrdenAnde(f.Emision))
+                .ThenByDescending(f => ParseFechaOrdenAnde(f.Vencimiento))
+                .ToList();
+            if (pendientes.Count < 2)
+                return;
+
+            var ultima = pendientes[0];
+            if (!ultima.MontoDesdeDeudaTotal)
+                return;
+
+            var otras = pendientes.Skip(1).Sum(f => f.Monto);
+            if (otras <= 0 || ultima.Monto <= otras)
+                return;
+
+            ultima.Monto -= otras;
+            ultima.MontoDesdeDeudaTotal = false;
+        }
+
+        private static long ParseFechaOrdenAnde(string? raw)
+        {
+            var s = (raw ?? "").Trim();
+            if (s.Length == 0) return 0;
+            if (DateTime.TryParse(s, new CultureInfo("es-PY"), DateTimeStyles.None, out var d)
+                || DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out d))
+                return d.Ticks;
+            return 0;
         }
 
         private static bool TryFindImporte(JsonElement res, out decimal importe)

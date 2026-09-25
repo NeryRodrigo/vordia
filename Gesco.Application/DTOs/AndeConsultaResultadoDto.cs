@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Gesco.Application.DTOs
 {
@@ -17,6 +18,9 @@ namespace Gesco.Application.DTOs
         public string? SecRec { get; set; }
         public string? FechaFacturacion { get; set; }
         public bool FacturaElectronica { get; set; } = true;
+        /// <summary>True si el monto salió de deudaTotal (acumulada), no del importe del comprobante.</summary>
+        [JsonIgnore]
+        public bool MontoDesdeDeudaTotal { get; set; }
     }
 
     public class AndeConsultaResultadoDto

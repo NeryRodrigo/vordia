@@ -68,6 +68,8 @@ builder.Services.Configure<FormOptions>(o =>
 builder.WebHost.ConfigureKestrel(o =>
 {
     o.Limits.MaxRequestBodySize = 25 * 1024 * 1024;
+    o.Limits.KeepAliveTimeout = TimeSpan.FromMinutes(3);
+    o.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
 });
 
 var jwtKey = builder.Configuration["Jwt:Key"]
