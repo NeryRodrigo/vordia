@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -25,6 +26,7 @@ namespace Gesco.Application.Services
             string? fFact = null,
             bool? electronica = null,
             string? origen = null,
+            string? recapt = null,
             CancellationToken ct = default);
     }
 
@@ -297,6 +299,7 @@ namespace Gesco.Application.Services
             string? fFact = null,
             bool? electronica = null,
             string? origen = null,
+            string? recapt = null,
             CancellationToken ct = default)
         {
             var nisLimpio = new string((nis ?? "").Where(char.IsDigit).ToArray());
@@ -345,11 +348,16 @@ namespace Gesco.Application.Services
 
             // GET open/ y Chrome XHR reciben "Make sure Captcha Page" (Radware).
             // situacionActual ya funciona por POST + kwfxtoken: el PDF va por el mismo canal.
+            var clientKey = _config["AndeConfig:ClientKey"];
+            if (string.IsNullOrWhiteSpace(clientKey))
+                clientKey = ClientKey;
+
             var form = new Dictionary<string, string>
             {
                 ["kwfxtoken"] = kwfx ?? "",
                 ["nis"] = nisLimpio,
-                ["nro_nis"] = nisLimpio
+                ["nro_nis"] = nisLimpio,
+                ["clientKey"] = clientKey
             };
             if (!string.IsNullOrWhiteSpace(secNis))
                 form["sec_nis"] = secNis!;
@@ -357,18 +365,23 @@ namespace Gesco.Application.Services
                 form["sec_rec"] = secRec!;
             if (!string.IsNullOrWhiteSpace(fFact))
                 form["f_fact"] = FormatearFechaFacturaAnde(fFact);
+            if (!string.IsNullOrWhiteSpace(recapt))
+                form["recapt"] = recapt!;
 
             var postUrls = new List<string>();
             if (esPenultima)
             {
+                postUrls.Add(OpenApiBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
                 postUrls.Add(MiCuentaBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
                 postUrls.Add(MiCuentaBase + "v3/suministro/penultimaFacturaElectronicaPendientePdf");
             }
             if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec))
             {
+                postUrls.Add(OpenApiBase + "v5/suministro/facturaElectronicaPdf");
                 postUrls.Add(MiCuentaBase + "v5/suministro/facturaElectronicaPdf");
                 postUrls.Add(MiCuentaBase + "v3/suministro/facturaElectronicaPdf");
             }
+            postUrls.Add(OpenApiBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
             postUrls.Add(MiCuentaBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
             postUrls.Add(MiCuentaBase + "v3/suministro/ultimaFacturaElectronicaPendientePdf");
 
@@ -379,8 +392,39 @@ namespace Gesco.Application.Services
                 if (pdfPost != null) return pdfPost;
             }
 
+            var getUrls = urls
+                .Where(u => u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
+                .Distinct()
+                .ToList();
+            if (getUrls.Count == 0)
+            {
+                getUrls.Add(esPenultima
+                    ? OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}"
+                    : OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
+            }
+
+            foreach (var getUrl in getUrls)
+            {
+                var urlKey = AgregarQuery(getUrl, "clientKey", clientKey);
+                var pdfGet = await TryDescargarPdfAsync(urlKey, ct, recapt);
+                if (pdfGet != null) return pdfGet;
+            }
+
+            var chromeUrl = AgregarQuery(getUrls[0], "clientKey", clientKey);
+            _logger.LogInformation("ANDE PDF: intentando Chrome + reCAPTCHA {Url}", chromeUrl);
+            var pdfChrome = await DescargarPdfConRecaptchaBrowserAsync(chromeUrl, kwfx, ct);
+            if (pdfChrome != null) return pdfChrome;
+
             _logger.LogInformation("ANDE PDF: sin resultado para NIS {Nis}", nisLimpio);
             return null;
+        }
+
+        private static string AgregarQuery(string url, string key, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || url.Contains(key + "=", StringComparison.OrdinalIgnoreCase))
+                return url;
+            var sep = url.Contains('?') ? "&" : "?";
+            return url + sep + key + "=" + Uri.EscapeDataString(value);
         }
 
         private async Task<byte[]?> TryDescargarPdfAsync(string url, CancellationToken ct, string? conRecapt)
