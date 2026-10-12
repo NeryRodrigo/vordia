@@ -18,8 +18,16 @@ namespace Gesco.Application.Services
         Task<AndeConsultaResultadoDto> ConsultarSaldoAsync(string nis, CancellationToken ct = default);
         /// <summary>Token kwfx de la sesión HTTP actual (si vigente).</summary>
         string? GetKwfxTokenActual();
-        /// <summary>URL y campos para pedir el KUDE oficial desde el navegador (misma sesión JWT).</summary>
-        object ArmarPedidoComprobanteOficial(
+        /// <summary>JWT ANDE de la sesión HTTP actual (si vigente).</summary>
+        string? GetJwtActual();
+        /// <summary>GET del KUDE oficial (open/). Para un worker con IP de Paraguay, no Chrome.</summary>
+        Task<byte[]?> BajarKudePorGetAsync(
+            string url,
+            string? kwfx = null,
+            string? jwt = null,
+            CancellationToken ct = default);
+        /// <summary>URL y campos para pedir el KUDE oficial (GET open/).</summary>
+        AndePedidoComprobante ArmarPedidoComprobanteOficial(
             string nis,
             string? secNis = null,
             string? secRec = null,
@@ -36,6 +44,13 @@ namespace Gesco.Application.Services
             string? origen = null,
             string? recapt = null,
             CancellationToken ct = default);
+    }
+
+    public sealed class AndePedidoComprobante
+    {
+        public string Url { get; set; } = "";
+        public string Action { get; set; } = "";
+        public Dictionary<string, string> Fields { get; set; } = new();
     }
 
     /// <summary>
@@ -185,7 +200,9 @@ namespace Gesco.Application.Services
 
         public string? GetKwfxTokenActual() => TokenVigente() ? _kwfxToken : null;
 
-        public object ArmarPedidoComprobanteOficial(
+        public string? GetJwtActual() => TokenVigente() ? _jwt : null;
+
+        public AndePedidoComprobante ArmarPedidoComprobanteOficial(
             string nis,
             string? secNis = null,
             string? secRec = null,
@@ -226,7 +243,12 @@ namespace Gesco.Application.Services
             // El API open/ de ANDE solo acepta GET (POST = HTTP 405).
             var qs = string.Join("&", fields.Select(kv =>
                 $"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value)}"));
-            return new { url = $"{action}?{qs}", action, fields };
+            return new AndePedidoComprobante
+            {
+                Url = $"{action}?{qs}",
+                Action = action,
+                Fields = fields
+            };
         }
 
         public async Task<(bool Ok, string Mensaje, bool Renovado)> AsegurarJwtAsync(CancellationToken ct = default)
@@ -364,6 +386,7 @@ namespace Gesco.Application.Services
             await Gate.WaitAsync(ct);
             var urls = new List<string>();
             string? kwfx = null;
+            string? situacionTxt = null;
             try
             {
                 await WarmupPortalAsync(ct);
@@ -379,7 +402,7 @@ namespace Gesco.Application.Services
 
                 kwfx = _kwfxToken;
 
-                var situacionTxt = await PostFormAsync(SituacionUrl, new Dictionary<string, string>
+                situacionTxt = await PostFormAsync(SituacionUrl, new Dictionary<string, string>
                 {
                     ["kwfxtoken"] = _kwfxToken!,
                     ["nis"] = nisLimpio
@@ -398,84 +421,67 @@ namespace Gesco.Application.Services
                 Gate.Release();
             }
 
-            // GET open/ y Chrome XHR reciben "Make sure Captcha Page" (Radware).
-            // situacionActual ya funciona por POST + kwfxtoken: el PDF va por el mismo canal.
+            // situacionActual funciona en GCP. El PDF open/ no: Radware bloquea IPs de datacenter.
+            var embebido = ExtraerPdfDesdeJson(Encoding.UTF8.GetBytes(situacionTxt ?? ""));
+            if (embebido != null)
+            {
+                _logger.LogInformation("ANDE PDF: KUDE embebido en situacionActual ({Len} bytes)", embebido.Length);
+                return embebido;
+            }
+
+            var pistas = ExtraerPistasPdfDesdeJson(situacionTxt);
+            if (pistas.Claves.Count > 0)
+                _logger.LogInformation("ANDE PDF situacion claves: {Keys}", string.Join(", ", pistas.Claves.Take(60)));
+
+            var viaPistas = await TryDescargarDesdePistasAsync(pistas, ct);
+            if (viaPistas != null)
+                return viaPistas;
+
             var clientKey = _config["AndeConfig:ClientKey"];
             if (string.IsNullOrWhiteSpace(clientKey))
                 clientKey = ClientKey;
 
-            var form = new Dictionary<string, string>
-            {
-                ["kwfxtoken"] = kwfx ?? "",
-                ["nis"] = nisLimpio,
-                ["nro_nis"] = nisLimpio,
-                ["clientKey"] = clientKey
-            };
-            if (!string.IsNullOrWhiteSpace(secNis))
-                form["sec_nis"] = secNis!;
-            if (!string.IsNullOrWhiteSpace(secRec))
-                form["sec_rec"] = secRec!;
-            if (!string.IsNullOrWhiteSpace(fFact))
-                form["f_fact"] = FormatearFechaFacturaAnde(fFact);
-            if (!string.IsNullOrWhiteSpace(recapt))
-                form["recapt"] = recapt!;
-
-            // Open/ solo acepta GET (POST = 405). En GCP el GET open/ da 404/captcha.
-            // situacionActual (miCuenta POST) sí funciona: el PDF se pide por ese canal.
-            var enServidorLinux = OperatingSystem.IsLinux();
-            var postUrls = new List<string>();
-            if (esPenultima)
-            {
-                postUrls.Add(MiCuentaBase + "v5/suministro/penultimaFacturaElectronicaPendientePdf");
-                postUrls.Add(MiCuentaBase + "v3/suministro/penultimaFacturaElectronicaPendientePdf");
-            }
-            if (!string.IsNullOrWhiteSpace(secNis) && !string.IsNullOrWhiteSpace(secRec))
-            {
-                postUrls.Add(MiCuentaBase + "v5/suministro/facturaElectronicaPdf");
-                postUrls.Add(MiCuentaBase + "v3/suministro/facturaElectronicaPdf");
-            }
-            postUrls.Add(MiCuentaBase + "v5/suministro/ultimaFacturaElectronicaPendientePdf");
-            postUrls.Add(MiCuentaBase + "v3/suministro/ultimaFacturaElectronicaPendientePdf");
-
-            foreach (var postUrl in postUrls.Distinct())
-            {
-                _logger.LogInformation("ANDE PDF POST: {Url}", postUrl);
-                var pdfPost = await TryDescargarPdfPostAsync(postUrl, form, ct);
-                if (pdfPost != null) return pdfPost;
-            }
-
-            var getUrls = urls.Distinct().ToList();
+            var getUrls = urls
+                .Where(u => u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
+                .Distinct()
+                .ToList();
             if (getUrls.Count == 0)
             {
                 getUrls.Add(esPenultima
                     ? OpenApiBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}"
                     : OpenApiBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
-                getUrls.Add(esPenultima
-                    ? MiCuentaBase + $"v5/suministro/penultimaFacturaElectronicaPendientePdf?nis={nisLimpio}"
-                    : MiCuentaBase + $"v5/suministro/ultimaFacturaElectronicaPendientePdf?nis={nisLimpio}");
             }
 
-            // En Windows (IP PY) el GET open/ baja el KUDE. En Linux/GCP se salta: 404 Tahoma / captcha.
-            var getCandidates = enServidorLinux
-                ? getUrls.Where(u => !u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase)).ToList()
-                : getUrls;
-
-            foreach (var getUrl in getCandidates)
+            var waf = false;
+            foreach (var getUrl in getUrls)
             {
                 var urlKey = AgregarQuery(getUrl, "clientKey", clientKey);
-                var pdfGet = await TryDescargarPdfAsync(urlKey, ct, recapt);
+                var (pdfGet, bloqueo) = await TryDescargarPdfConDiagnosticoAsync(urlKey, ct, recapt, kwfx, _jwt);
                 if (pdfGet != null) return pdfGet;
+                waf |= bloqueo;
             }
 
-            var chromeBase = getUrls.FirstOrDefault(u => u.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
-                ?? getUrls[0];
-            var chromeUrl = AgregarQuery(chromeBase, "clientKey", clientKey);
-            _logger.LogInformation("ANDE PDF: Chrome + reCAPTCHA {Url} (linux={Linux})", chromeUrl, enServidorLinux);
-            var pdfChrome = await DescargarPdfConRecaptchaBrowserAsync(chromeUrl, kwfx, ct);
-            if (pdfChrome != null) return pdfChrome;
+            if (waf)
+            {
+                _logger.LogWarning(
+                    "ANDE WAF bloqueó el KUDE desde esta IP. Configurá AndeConfig:PdfWorkerUrl (API en Paraguay) o AndeConfig:PdfProxy.");
+                return null;
+            }
 
             _logger.LogInformation("ANDE PDF: sin resultado para NIS {Nis}", nisLimpio);
             return null;
+        }
+
+        public async Task<byte[]?> BajarKudePorGetAsync(
+            string url,
+            string? kwfx = null,
+            string? jwt = null,
+            CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                return null;
+            var (pdf, _) = await TryDescargarPdfConDiagnosticoAsync(url, ct, null, kwfx, jwt);
+            return pdf;
         }
 
         private static string AgregarQuery(string url, string key, string value)
@@ -486,14 +492,120 @@ namespace Gesco.Application.Services
             return url + sep + key + "=" + Uri.EscapeDataString(value);
         }
 
-        private async Task<byte[]?> TryDescargarPdfAsync(string url, CancellationToken ct, string? conRecapt)
+        private sealed class PistasPdf
         {
+            public List<string> Claves { get; } = new();
+            public List<string> Urls { get; } = new();
+            public List<string> Cdcs { get; } = new();
+            public List<byte[]> Pdfs { get; } = new();
+        }
+
+        private static PistasPdf ExtraerPistasPdfDesdeJson(string? json)
+        {
+            var p = new PistasPdf();
+            if (string.IsNullOrWhiteSpace(json))
+                return p;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                CaminarJsonPistas(doc.RootElement, "", p);
+            }
+            catch
+            {
+                /* situacion no JSON */
+            }
+            return p;
+        }
+
+        private static void CaminarJsonPistas(JsonElement el, string path, PistasPdf p)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var prop in el.EnumerateObject())
+                    {
+                        if (p.Claves.Count < 80)
+                            p.Claves.Add(string.IsNullOrEmpty(path) ? prop.Name : path + prop.Name);
+                        CaminarJsonPistas(prop.Value, path + prop.Name + ".", p);
+                    }
+                    break;
+                case JsonValueKind.Array:
+                    var i = 0;
+                    foreach (var item in el.EnumerateArray())
+                    {
+                        if (i++ > 20) break;
+                        CaminarJsonPistas(item, path, p);
+                    }
+                    break;
+                case JsonValueKind.String:
+                    var s = (el.GetString() ?? "").Trim();
+                    if (s.Length < 8)
+                        return;
+                    var pdf = BytesDesdeNodoJson(el);
+                    if (pdf != null)
+                    {
+                        p.Pdfs.Add(pdf);
+                        return;
+                    }
+                    if (s.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                        || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        p.Urls.Add(s);
+                        return;
+                    }
+                    var soloDigitos = new string(s.Where(char.IsDigit).ToArray());
+                    if (soloDigitos.Length == 44)
+                        p.Cdcs.Add(soloDigitos);
+                    break;
+            }
+        }
+
+        private async Task<byte[]?> TryDescargarDesdePistasAsync(PistasPdf pistas, CancellationToken ct)
+        {
+            foreach (var pdf in pistas.Pdfs)
+            {
+                if (EsPdfBytes(pdf))
+                {
+                    _logger.LogInformation("ANDE PDF: KUDE en JSON ({Len} bytes)", pdf.Length);
+                    return pdf;
+                }
+            }
+
+            foreach (var url in pistas.Urls.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                if (url.Contains("ande.gov.py", StringComparison.OrdinalIgnoreCase)
+                    && url.Contains("/api/open/", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var (pdf, _) = await TryDescargarPdfConDiagnosticoAsync(url, ct, null, null, null);
+                if (pdf != null) return pdf;
+            }
+
+            foreach (var cdc in pistas.Cdcs.Distinct())
+            {
+                var setUrl = "https://ekuatia.set.gov.py/consultas/qr?nVersion=150&Id=" + cdc;
+                _logger.LogInformation("ANDE PDF: CDC {Cdc} → SET", cdc);
+                var (pdf, _) = await TryDescargarPdfConDiagnosticoAsync(setUrl, ct, null, null, null);
+                if (pdf != null) return pdf;
+            }
+
+            return null;
+        }
+
+        private async Task<(byte[]? Pdf, bool Waf)> TryDescargarPdfConDiagnosticoAsync(
+            string url,
+            CancellationToken ct,
+            string? conRecapt,
+            string? kwfx,
+            string? jwt)
+        {
+            HttpClient? propio = null;
             try
             {
                 var sep = url.Contains('?') ? "&" : "?";
                 var urlFinal = url;
-                if (!string.IsNullOrWhiteSpace(_kwfxToken) && !urlFinal.Contains("kwfxtoken=", StringComparison.OrdinalIgnoreCase))
-                    urlFinal += $"{sep}kwfxtoken={Uri.EscapeDataString(_kwfxToken)}";
+                var token = kwfx ?? _kwfxToken;
+                if (!string.IsNullOrWhiteSpace(token) && !urlFinal.Contains("kwfxtoken=", StringComparison.OrdinalIgnoreCase))
+                    urlFinal += $"{sep}kwfxtoken={Uri.EscapeDataString(token)}";
                 if (!string.IsNullOrWhiteSpace(conRecapt))
                 {
                     sep = urlFinal.Contains('?') ? "&" : "?";
@@ -504,32 +616,74 @@ namespace Gesco.Application.Services
                 req.Headers.TryAddWithoutValidation("Accept", "application/pdf,*/*");
                 req.Headers.TryAddWithoutValidation("Referer", "https://www.ande.gov.py/servicios/");
                 req.Headers.TryAddWithoutValidation("Origin", "https://www.ande.gov.py");
-                if (!string.IsNullOrWhiteSpace(_jwt))
-                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _jwt);
+                var bearer = jwt ?? _jwt;
+                if (!string.IsNullOrWhiteSpace(bearer))
+                    req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
 
-                using var resp = await AndeHttp.SendAsync(req, ct);
-                if (!resp.IsSuccessStatusCode)
+                var http = AndeHttp;
+                var proxyUrl = (_config["AndeConfig:PdfProxy"] ?? "").Trim();
+                if (!string.IsNullOrWhiteSpace(proxyUrl))
                 {
-                    _logger.LogDebug("ANDE PDF GET {Status} {Url}", (int)resp.StatusCode, url);
-                    return null;
+                    propio = CrearHttpClientConProxy(proxyUrl);
+                    http = propio;
+                    _logger.LogInformation("ANDE PDF GET vía proxy {Proxy}", proxyUrl);
                 }
 
+                using var resp = await http.SendAsync(req, ct);
                 var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
-                if (!EsPdfBytes(bytes))
+                if (EsPdfBytes(bytes))
                 {
-                    var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 160));
-                    _logger.LogWarning("ANDE PDF GET no-PDF {Status} ({Len}): {Preview}", (int)resp.StatusCode, bytes.Length, preview);
-                    return null;
+                    _logger.LogInformation("ANDE PDF oficial OK ({Len} bytes) desde {Url}", bytes.Length, url);
+                    return (bytes, false);
                 }
 
-                _logger.LogInformation("ANDE PDF oficial OK ({Len} bytes) desde {Url}", bytes.Length, url);
-                return bytes;
+                var desdeJson = ExtraerPdfDesdeJson(bytes);
+                if (desdeJson != null)
+                {
+                    _logger.LogInformation("ANDE PDF JSON OK ({Len} bytes) {Url}", desdeJson.Length, url);
+                    return (desdeJson, false);
+                }
+
+                var preview = Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 180));
+                var waf = EsBloqueoRadware(preview)
+                    || preview.Contains("Captcha Page", StringComparison.OrdinalIgnoreCase)
+                    || preview.Contains("Tahoma", StringComparison.OrdinalIgnoreCase)
+                    || preview.Contains("humano", StringComparison.OrdinalIgnoreCase);
+                _logger.LogWarning("ANDE PDF GET no-PDF {Status} ({Len}): {Preview}", (int)resp.StatusCode, bytes.Length, preview);
+                return (null, waf);
             }
             catch (Exception ex)
             {
                 _logger.LogDebug(ex, "ANDE PDF fallo GET {Url}", url);
-                return null;
+                return (null, false);
             }
+            finally
+            {
+                propio?.Dispose();
+            }
+        }
+
+        private static HttpClient CrearHttpClientConProxy(string proxyUrl)
+        {
+            var handler = new HttpClientHandler
+            {
+                Proxy = new WebProxy(proxyUrl),
+                UseProxy = true,
+                AutomaticDecompression = DecompressionMethods.All
+            };
+            var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(90) };
+            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("Origin", "https://www.ande.gov.py");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("Referer", "https://www.ande.gov.py/servicios/");
+            http.DefaultRequestHeaders.TryAddWithoutValidation("Accept-Language", "es-PY,es;q=0.9");
+            return http;
+        }
+
+        private async Task<byte[]?> TryDescargarPdfAsync(string url, CancellationToken ct, string? conRecapt)
+        {
+            var (pdf, _) = await TryDescargarPdfConDiagnosticoAsync(url, ct, conRecapt, _kwfxToken, _jwt);
+            return pdf;
         }
 
         /// <summary>
