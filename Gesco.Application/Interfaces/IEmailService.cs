@@ -18,6 +18,17 @@ namespace Gesco.Application.Interfaces
             string mensaje
         );
 
+        /// <summary>
+        /// Correo comercial a un prospecto (Necesidades del Mercado). Las respuestas van a
+        /// <paramref name="responderA"/> o, si no se indica, a la casilla remitente.
+        /// </summary>
+        Task<(bool Enviado, string? Error)> EnviarCorreoComercialAsync(
+            string emailDestino,
+            string asunto,
+            string mensaje,
+            string? responderA = null
+        );
+
         Task<bool> EnviarComprobanteAsync(
             string emailDestino,
             string nombreCliente,

@@ -87,6 +87,14 @@ namespace Gesco.Application.Interfaces
         DbSet<AgroRacion> AgroRaciones { get; set; }
         DbSet<AgroDispositivo> AgroDispositivos { get; set; }
         DbSet<AgroAlerta> AgroAlertas { get; set; }
+        DbSet<AgroConfiguracion> AgroConfiguraciones { get; set; }
+        DbSet<AgroSanidad> AgroSanidad { get; set; }
+        DbSet<AgroInsumo> AgroInsumos { get; set; }
+        DbSet<AgroInsumoMovimiento> AgroInsumoMovimientos { get; set; }
+        DbSet<HqMercadoFuente> HqMercadoFuentes { get; set; }
+        DbSet<HqMercadoNecesidad> HqMercadoNecesidades { get; set; }
+        DbSet<HqMercadoContacto> HqMercadoContactos { get; set; }
+        DbSet<HqMercadoPedido> HqMercadoPedidos { get; set; }
 
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }

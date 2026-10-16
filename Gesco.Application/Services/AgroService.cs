@@ -13,7 +13,7 @@ namespace Gesco.Application.Services
     /// VORDIA AGRO — prototipo confinamiento (Agrofield).
     /// Additive: no toca Habitat / Stay / Fontana / HQ CRM.
     /// </summary>
-    public class AgroService : IAgroService
+    public partial class AgroService : IAgroService
     {
         private readonly IApplicationDbContext _db;
 
@@ -154,11 +154,12 @@ namespace Gesco.Application.Services
             };
         }
 
-        public async Task<List<AgroAnimalDto>> ListarAnimalesAsync(int empresaId, int? establecimientoId = null, string? estado = null)
+        public async Task<List<AgroAnimalDto>> ListarAnimalesAsync(int empresaId, int? establecimientoId = null, string? estado = null, string? etapa = null)
         {
             var q = _db.AgroAnimales.AsNoTracking().Where(a => a.EmpresaId == empresaId && a.Activo);
             if (establecimientoId.HasValue) q = q.Where(a => a.EstablecimientoId == establecimientoId.Value);
             if (!string.IsNullOrWhiteSpace(estado)) q = q.Where(a => a.Estado == estado);
+            if (!string.IsNullOrWhiteSpace(etapa)) q = q.Where(a => a.Etapa == etapa);
 
             var list = await q.OrderBy(a => a.CodigoInterno).ToListAsync();
             var loteIds = list.Where(a => a.LoteId.HasValue).Select(a => a.LoteId!.Value).Distinct().ToList();
@@ -166,7 +167,9 @@ namespace Gesco.Application.Services
                 .Where(l => loteIds.Contains(l.LoteId))
                 .ToDictionaryAsync(l => l.LoteId, l => l.Codigo);
 
-            return list.Select(a => MapAnimal(a, a.LoteId.HasValue && lotes.ContainsKey(a.LoteId.Value) ? lotes[a.LoteId.Value] : null)).ToList();
+            var dtos = list.Select(a => MapAnimal(a, a.LoteId.HasValue && lotes.ContainsKey(a.LoteId.Value) ? lotes[a.LoteId.Value] : null)).ToList();
+            await EnriquecerAnimalesAsync(empresaId, dtos);
+            return dtos;
         }
 
         public async Task<AgroAnimalDto> UpsertAnimalAsync(AgroAnimalUpsertRequest request, int? animalId = null)
@@ -200,6 +203,18 @@ namespace Gesco.Application.Services
             if (request.PesoActualKg.HasValue) entity.PesoActualKg = request.PesoActualKg;
             entity.Estado = string.IsNullOrWhiteSpace(request.Estado) ? "Activo" : request.Estado.Trim();
             entity.Notas = request.Notas;
+            if (!string.IsNullOrWhiteSpace(request.Etapa))
+            {
+                var etapa = NormalizarEtapa(request.Etapa);
+                if (entity.Etapa != etapa || !entity.FechaEtapa.HasValue) entity.FechaEtapa = DateTime.UtcNow;
+                entity.Etapa = etapa;
+            }
+            if (request.Raza != null) entity.Raza = request.Raza;
+            if (request.FechaNacimiento.HasValue) entity.FechaNacimiento = request.FechaNacimiento.Value.Date;
+            if (request.PesoNacimientoKg.HasValue) entity.PesoNacimientoKg = request.PesoNacimientoKg;
+            if (request.MadreCodigo != null) entity.MadreCodigo = request.MadreCodigo;
+            if (request.PadreCodigo != null) entity.PadreCodigo = request.PadreCodigo;
+            if (request.PesoObjetivoKg.HasValue) entity.PesoObjetivoKg = request.PesoObjetivoKg;
             entity.FechaActualizacion = DateTime.UtcNow;
             await _db.SaveChangesAsync();
 
@@ -332,7 +347,7 @@ namespace Gesco.Application.Services
             if (establecimientoId.HasValue) q = q.Where(l => l.EstablecimientoId == establecimientoId.Value);
             var lotes = await q.OrderBy(l => l.Codigo).ToListAsync();
             var counts = await _db.AgroAnimales.AsNoTracking()
-                .Where(a => a.EmpresaId == empresaId && a.Activo && a.LoteId != null)
+                .Where(a => a.EmpresaId == empresaId && a.Activo && a.LoteId != null && a.Etapa != "Vendido" && a.Etapa != "Baja")
                 .GroupBy(a => a.LoteId!.Value)
                 .Select(g => new { LoteId = g.Key, N = g.Count() })
                 .ToDictionaryAsync(x => x.LoteId, x => x.N);
@@ -346,7 +361,9 @@ namespace Gesco.Application.Services
                 Tipo = l.Tipo,
                 Capacidad = l.Capacidad,
                 CamaraCodigo = l.CamaraCodigo,
-                Animales = counts.ContainsKey(l.LoteId) ? counts[l.LoteId] : 0
+                Animales = counts.ContainsKey(l.LoteId) ? counts[l.LoteId] : 0,
+                Etapa = l.Etapa,
+                PesoObjetivoKg = l.PesoObjetivoKg
             }).ToList();
         }
 
@@ -508,7 +525,15 @@ namespace Gesco.Application.Services
                 UltimaLng = a.UltimaLng,
                 UltimaUbicacionAt = a.UltimaUbicacionAt,
                 BateriaCollarPct = a.BateriaCollarPct,
-                Notas = a.Notas
+                Notas = a.Notas,
+                Etapa = a.Etapa,
+                FechaEtapa = a.FechaEtapa,
+                Raza = a.Raza,
+                FechaNacimiento = a.FechaNacimiento,
+                PesoNacimientoKg = a.PesoNacimientoKg,
+                MadreCodigo = a.MadreCodigo,
+                PadreCodigo = a.PadreCodigo,
+                PesoObjetivoKg = a.PesoObjetivoKg
             };
         }
     }

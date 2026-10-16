@@ -193,6 +193,12 @@ builder.Services.AddScoped<IHabitacionService, HabitacionService>();
 builder.Services.AddScoped<IReservaService, ReservaService>();
 builder.Services.AddScoped<IStayService, StayService>();
 builder.Services.AddScoped<IAgroService, AgroService>();
+builder.Services.AddScoped<IMercadoVentasService, MercadoVentasService>();
+builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("VordiaHQ-MercadoRadar/1.0 (+https://vordia.com.py)");
+});
 builder.Services.AddScoped<IUnidadCondominioService, UnidadCondominioService>();
 builder.Services.AddScoped<IContratoInquilinoService, ContratoInquilinoService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -223,6 +229,7 @@ builder.Services.AddHttpClient<IAndeJwtConsultaService, AndeJwtConsultaService>(
 });
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.AlquilerAlertasBackgroundService>();
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.CrmAutomatizacionesBackgroundService>();
+builder.Services.AddHostedService<Gesco.API.BackgroundServices.MercadoRadarBackgroundService>();
 
 builder.Services.AddDbContext<GescoDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

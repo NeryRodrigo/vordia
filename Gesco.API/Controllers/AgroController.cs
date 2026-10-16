@@ -54,10 +54,10 @@ namespace Gesco.API.Controllers
         }
 
         [HttpGet("animales")]
-        public async Task<IActionResult> Animales([FromQuery] int empresaId, [FromQuery] int? establecimientoId = null, [FromQuery] string? estado = null)
+        public async Task<IActionResult> Animales([FromQuery] int empresaId, [FromQuery] int? establecimientoId = null, [FromQuery] string? estado = null, [FromQuery] string? etapa = null)
         {
             if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
-            return Ok(await _agro.ListarAnimalesAsync(empresaId, establecimientoId, estado));
+            return Ok(await _agro.ListarAnimalesAsync(empresaId, establecimientoId, estado, etapa));
         }
 
         [HttpPost("animales")]
@@ -148,6 +148,123 @@ namespace Gesco.API.Controllers
             var updated = await _agro.SimularUbicacionAsync(request);
             if (updated == null) return NotFound(new { mensaje = "Animal no encontrado" });
             return Ok(updated);
+        }
+    
+        /* ───────────── Rediseño por módulos ───────────── */
+
+        [HttpGet("configuracion")]
+        public async Task<IActionResult> Configuracion([FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _agro.ObtenerConfiguracionAsync(empresaId));
+        }
+
+        [HttpPut("configuracion")]
+        public async Task<IActionResult> GuardarConfiguracion([FromBody] AgroConfiguracionRequest request)
+        {
+            if (request.EmpresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _agro.GuardarConfiguracionAsync(request));
+        }
+
+        /// <summary>Dashboard ejecutivo: panorama de toda la empresa ganadera.</summary>
+        [HttpGet("ejecutivo")]
+        public async Task<IActionResult> Ejecutivo([FromQuery] int empresaId, [FromQuery] int? establecimientoId = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _agro.EjecutivoAsync(empresaId, establecimientoId);
+            return dto == null ? NotFound(new { mensaje = "Sin establecimiento Agro" }) : Ok(dto);
+        }
+
+        /// <summary>Dashboard VORDIA Feed — Engorde / Confinamiento.</summary>
+        [HttpGet("feed")]
+        public async Task<IActionResult> Feed([FromQuery] int empresaId, [FromQuery] int? establecimientoId = null, [FromQuery] int dias = 70)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _agro.FeedAsync(empresaId, establecimientoId, dias);
+            return dto == null ? NotFound(new { mensaje = "Sin establecimiento Agro" }) : Ok(dto);
+        }
+
+        /// <summary>Dashboard principal de VORDIA Agro (todo en una llamada).</summary>
+        [HttpGet("principal")]
+        public async Task<IActionResult> Principal([FromQuery] int empresaId, [FromQuery] int dias = 30)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            var dto = await _agro.PrincipalAsync(empresaId, dias);
+            return dto == null ? NotFound(new { mensaje = "Sin establecimiento Agro" }) : Ok(dto);
+        }
+
+        [HttpGet("inventario")]
+        public async Task<IActionResult> Inventario([FromQuery] int empresaId)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _agro.ListarInventarioAsync(empresaId));
+        }
+
+        [HttpPost("inventario")]
+        public async Task<IActionResult> CrearInsumo([FromBody] AgroInsumoRequest request)
+        {
+            try { return Ok(await _agro.CrearInsumoAsync(request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpGet("inventario/{insumoId:int}/movimientos")]
+        public async Task<IActionResult> Movimientos(int insumoId, [FromQuery] int empresaId) =>
+            Ok(await _agro.ListarMovimientosAsync(empresaId, insumoId));
+
+        [HttpPost("inventario/{insumoId:int}/movimientos")]
+        public async Task<IActionResult> RegistrarMovimiento(int insumoId, [FromBody] AgroMovimientoRequest request)
+        {
+            try { return Ok(await _agro.RegistrarMovimientoAsync(insumoId, request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpPost("lotes")]
+        public async Task<IActionResult> CrearLote([FromBody] AgroLoteRequest request)
+        {
+            try { return Ok(await _agro.GuardarLoteAsync(request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpPut("lotes/{loteId:int}")]
+        public async Task<IActionResult> ActualizarLote(int loteId, [FromBody] AgroLoteRequest request)
+        {
+            try { return Ok(await _agro.GuardarLoteAsync(request, loteId)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpGet("sanidad")]
+        public async Task<IActionResult> Sanidad([FromQuery] int empresaId, [FromQuery] int? establecimientoId = null, [FromQuery] string? estado = null)
+        {
+            if (empresaId <= 0) return BadRequest(new { mensaje = "empresaId requerido" });
+            return Ok(await _agro.ListarSanidadAsync(empresaId, establecimientoId, estado));
+        }
+
+        [HttpPost("sanidad")]
+        public async Task<IActionResult> RegistrarSanidad([FromBody] AgroSanidadCreateRequest request)
+        {
+            try { return Ok(await _agro.RegistrarSanidadAsync(request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpPost("sanidad/{sanidadId:int}/aplicar")]
+        public async Task<IActionResult> AplicarSanidad(int sanidadId, [FromQuery] int empresaId)
+        {
+            var ok = await _agro.AplicarSanidadAsync(sanidadId, empresaId);
+            return ok ? Ok(new { success = true }) : NotFound();
+        }
+
+        [HttpPost("animales/{animalId:int}/etapa")]
+        public async Task<IActionResult> CambiarEtapa(int animalId, [FromBody] AgroCambioEtapaRequest request)
+        {
+            try { return Ok(await _agro.CambiarEtapaAsync(animalId, request)); }
+            catch (InvalidOperationException ex) { return BadRequest(new { mensaje = ex.Message }); }
+        }
+
+        [HttpGet("animales/{animalId:int}/ficha")]
+        public async Task<IActionResult> Ficha(int animalId, [FromQuery] int empresaId)
+        {
+            var ficha = await _agro.FichaAnimalAsync(empresaId, animalId);
+            return ficha == null ? NotFound(new { mensaje = "Animal no encontrado" }) : Ok(ficha);
         }
     }
 }
