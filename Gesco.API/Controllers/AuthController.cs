@@ -15,18 +15,33 @@ namespace Gesco.API.Controllers
     {
         private readonly IAuthService _authService;
         private readonly IJwtTokenService _jwt;
+        private readonly IEmpresaScope _scope;
 
-        public AuthController(IAuthService authService, IJwtTokenService jwt)
+        public AuthController(IAuthService authService, IJwtTokenService jwt, IEmpresaScope scope)
         {
+            _scope = scope;
             _authService = authService;
             _jwt = jwt;
         }
 
-        [AllowAnonymous]
+        /// <summary>
+        /// Alta de usuarios: solo administradores. Un administrador de cliente solo puede crear usuarios
+        /// de su propia empresa y nunca SUPERADMIN; el equipo de VORDIA (empresa operadora) puede crear en cualquiera.
+        /// </summary>
         [EnableRateLimiting("auth")]
         [HttpPost("register")]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
+            var rol = User.FindFirstValue(ClaimTypes.Role) ?? "";
+            if (!rol.Equals("ADMIN", StringComparison.OrdinalIgnoreCase) && !rol.Equals("SUPERADMIN", StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+            if (!int.TryParse(User.FindFirstValue("empresaId"), out var empresaActor)) return Forbid();
+            if (!await EsOperadorVordiaAsync(empresaActor))
+            {
+                if (request.EmpresaId != empresaActor) return Forbid();
+                if (string.Equals(request.Rol, "SUPERADMIN", StringComparison.OrdinalIgnoreCase)) return Forbid();
+            }
+            if (request.EmpresaId <= 0) return BadRequest(new { mensaje = "Indicá la empresa del usuario" });
             try
             {
                 var resultado = await _authService.RegisterAsync(request);
@@ -58,22 +73,15 @@ namespace Gesco.API.Controllers
             }
         }
 
+        /// <summary>
+        /// Deshabilitado: aceptaba cualquier correo sin verificar el token de Google, lo que permitía entrar
+        /// a cuentas ajenas. Se vuelve a habilitar solo con verificación real del ID token de Google.
+        /// </summary>
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
         [HttpPost("google-login")]
-        public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request)
-        {
-            try
-            {
-                var result = await _authService.GoogleLoginAsync(request);
-                result.Token = _jwt.CreateToken(result);
-                return Ok(result);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest(new { mensaje = ex.Message });
-            }
-        }
+        public IActionResult GoogleLogin([FromBody] GoogleLoginRequest request) =>
+            StatusCode(StatusCodes.Status410Gone, new { mensaje = "El ingreso con Google no está disponible. Ingresá con tu correo y contraseña." });
 
         [Authorize]
         [EnableRateLimiting("auth")]
@@ -122,6 +130,8 @@ namespace Gesco.API.Controllers
 
         [AllowAnonymous]
         [EnableRateLimiting("auth")]
+        private Task<bool> EsOperadorVordiaAsync(int empresaId) => _scope.EsOperadorVordiaAsync(empresaId);
+
         [HttpGet("empresas")]
         public async Task<IActionResult> GetEmpresas()
         {

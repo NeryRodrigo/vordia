@@ -377,7 +377,8 @@ namespace Gesco.Application.Services
             string emailDestino,
             string asunto,
             string mensaje,
-            string? responderA = null)
+            string? responderA = null,
+            string? bajaUrl = null)
         {
             try
             {
@@ -396,8 +397,10 @@ namespace Gesco.Application.Services
                     From = new MailAddress(senderEmail, "Vordia"),
                     Subject = asunto,
                     IsBodyHtml = true,
-                    Body = GenerarCorreoComercialHtml(mensaje)
+                    Body = GenerarCorreoComercialHtml(mensaje, bajaUrl)
                 };
+                if (!string.IsNullOrWhiteSpace(bajaUrl))
+                    message.Headers.Add("List-Unsubscribe", $"<{bajaUrl}>");
                 message.To.Add(new MailAddress(emailDestino.Trim()));
                 if (!string.IsNullOrWhiteSpace(responderA) && responderA.Contains('@'))
                     message.ReplyToList.Add(new MailAddress(responderA.Trim()));
@@ -424,8 +427,12 @@ namespace Gesco.Application.Services
             }
         }
 
-        private static string GenerarCorreoComercialHtml(string mensaje)
+        private static string GenerarCorreoComercialHtml(string mensaje, string? bajaUrl)
         {
+            // Comunicación comercial identificada y con baja simple (Ley 4868/2013 de comercio electrónico)
+            var baja = string.IsNullOrWhiteSpace(bajaUrl)
+                ? "Si no querés recibir más mensajes, respondé este correo con la palabra BAJA."
+                : $"Si no querés recibir más mensajes, <a href='{System.Net.WebUtility.HtmlEncode(bajaUrl)}' style='color:#7c8db5;'>date de baja con un clic</a> o respondé con la palabra BAJA.";
             // Los links quedan clickeables (por ejemplo el del pedido para aceptar)
             var cuerpo = System.Text.RegularExpressions.Regex.Replace(
                 System.Net.WebUtility.HtmlEncode(mensaje),
@@ -449,7 +456,9 @@ namespace Gesco.Application.Services
     </tr>
     <tr>
       <td style='padding:16px 24px;border-top:1px solid #e3e8f2;color:#7c8db5;font-size:12px;'>
-        Vordia · vordia.com.py · Respondé este correo y te contestamos a la brevedad.
+        <div>Comunicación comercial de VORDIA · <a href='https://www.vordia.com.py' style='color:#7c8db5;'>www.vordia.com.py</a> · Asunción, Paraguay.</div>
+        <div style='margin-top:6px;'>Te escribimos porque tu organización publicó un pedido o llamado público relacionado con sistemas de gestión. {baja}</div>
+        <div style='margin-top:6px;'><a href='https://www.vordia.com.py/privacidad' style='color:#7c8db5;'>Política de privacidad</a></div>
       </td>
     </tr>
   </table>

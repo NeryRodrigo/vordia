@@ -120,4 +120,15 @@ namespace Gesco.Domain.Entities
         public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
         public bool Activo { get; set; } = true;
     }
+
+    /// <summary>Correos que pidieron no recibir más comunicaciones comerciales (Ley 4868/2013).</summary>
+    [Table("HqMercadoBajas")]
+    public class HqMercadoBaja
+    {
+        [Key] public int BajaId { get; set; }
+        public int EmpresaId { get; set; }
+        [Required, StringLength(150)] public string Email { get; set; } = "";
+        [StringLength(40)] public string Origen { get; set; } = "Link";
+        public DateTime Fecha { get; set; } = DateTime.UtcNow;
+    }
 }

@@ -26,7 +26,8 @@ namespace Gesco.Application.Interfaces
             string emailDestino,
             string asunto,
             string mensaje,
-            string? responderA = null
+            string? responderA = null,
+            string? bajaUrl = null
         );
 
         Task<bool> EnviarComprobanteAsync(

@@ -95,6 +95,7 @@ namespace Gesco.Application.Interfaces
         DbSet<HqMercadoNecesidad> HqMercadoNecesidades { get; set; }
         DbSet<HqMercadoContacto> HqMercadoContactos { get; set; }
         DbSet<HqMercadoPedido> HqMercadoPedidos { get; set; }
+        DbSet<HqMercadoBaja> HqMercadoBajas { get; set; }
 
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }

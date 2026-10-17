@@ -40,6 +40,13 @@ namespace Gesco.API.Controllers
         [HttpPost("{token}/rechazar")]
         public Task<IActionResult> Rechazar(string token, [FromBody] MercadoPedidoRespuestaRequest request) => Responder(token, false, request);
 
+        /// <summary>Baja de comunicaciones comerciales desde el link del correo (token firmado).</summary>
+        [HttpPost("/api/public/bajas/{token}")]
+        public async Task<IActionResult> Baja(string token) =>
+            await _ventas.RegistrarBajaAsync(token)
+                ? Ok(new { mensaje = "Listo: no vas a recibir más correos comerciales de VORDIA." })
+                : BadRequest(new { mensaje = "El link de baja no es válido." });
+
         private async Task<IActionResult> Responder(string token, bool aceptar, MercadoPedidoRespuestaRequest request)
         {
             // Honeypot: solo un bot completa este campo

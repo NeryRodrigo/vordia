@@ -2,6 +2,9 @@ using Gesco.Application.DTOs;
 using Gesco.Application.Interfaces;
 using Gesco.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using System.Security.Cryptography;
+using System.Text;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,8 +25,11 @@ namespace Gesco.Application.Services
         private readonly IEmailService _email;
         private readonly ICrmService _crm;
 
-        public MercadoVentasService(IApplicationDbContext db, IEmailService email, ICrmService crm)
+        private readonly IConfiguration _config;
+
+        public MercadoVentasService(IApplicationDbContext db, IEmailService email, ICrmService crm, IConfiguration config)
         {
+            _config = config;
             _db = db;
             _email = email;
             _crm = crm;
@@ -108,8 +114,12 @@ namespace Gesco.Application.Services
             if (string.IsNullOrWhiteSpace(request.Para) || !request.Para.Contains('@')) throw new InvalidOperationException("Indicá un correo válido");
             if (string.IsNullOrWhiteSpace(request.Asunto) || string.IsNullOrWhiteSpace(request.Mensaje)) throw new InvalidOperationException("Asunto y mensaje son obligatorios");
             var n = await NecesidadAsync(necesidadId, request.EmpresaId);
+            var para = request.Para.Trim();
+            if (await _db.HqMercadoBajas.AnyAsync(b => b.EmpresaId == request.EmpresaId && b.Email == para.ToLower()))
+                throw new InvalidOperationException("Este contacto pidió no recibir más correos comerciales: no se puede enviar.");
 
-            var (enviado, error) = await _email.EnviarCorreoComercialAsync(request.Para.Trim(), request.Asunto.Trim(), request.Mensaje, request.ResponderA);
+            var bajaUrl = $"{SitioPublico}/baja/{TokenBaja(request.EmpresaId, para)}";
+            var (enviado, error) = await _email.EnviarCorreoComercialAsync(para, request.Asunto.Trim(), request.Mensaje, request.ResponderA, bajaUrl);
             var c = new HqMercadoContacto
             {
                 EmpresaId = request.EmpresaId,
@@ -333,6 +343,49 @@ namespace Gesco.Application.Services
         {
             if (string.IsNullOrWhiteSpace(token) || token.Length != 32 || !token.All(Uri.IsHexDigit)) return null;
             return await _db.HqMercadoPedidos.FirstOrDefaultAsync(p => p.Token == token && p.Activo);
+        }
+
+        // ───────────── Bajas de comunicaciones comerciales ─────────────
+
+        private string SitioPublico => (_config["Sitio:UrlPublica"] ?? "https://www.vordia.com.py").TrimEnd('/');
+
+        private byte[] SecretoBajas => Encoding.UTF8.GetBytes(_config["Bajas:Secret"] ?? _config["Jwt:Key"] ?? throw new InvalidOperationException("Falta Bajas:Secret"));
+
+        private static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+        private static byte[] DeB64Url(string s)
+        {
+            var t = s.Replace('-', '+').Replace('_', '/');
+            return Convert.FromBase64String(t.PadRight(t.Length + (4 - t.Length % 4) % 4, '='));
+        }
+
+        /// <summary>Token firmado (HMAC) con empresa y correo: no se puede falsificar ni usar para otro correo.</summary>
+        private string TokenBaja(int empresaId, string email)
+        {
+            var datos = Encoding.UTF8.GetBytes($"{empresaId}|{email.Trim().ToLowerInvariant()}");
+            using var h = new HMACSHA256(SecretoBajas);
+            return $"{B64Url(datos)}.{B64Url(h.ComputeHash(datos)[..16])}";
+        }
+
+        public async Task<bool> RegistrarBajaAsync(string token)
+        {
+            var partes = (token ?? "").Split('.');
+            if (partes.Length != 2) return false;
+            byte[] datos, firma;
+            try { datos = DeB64Url(partes[0]); firma = DeB64Url(partes[1]); }
+            catch (FormatException) { return false; }
+            using (var h = new HMACSHA256(SecretoBajas))
+                if (!CryptographicOperations.FixedTimeEquals(h.ComputeHash(datos)[..16], firma)) return false;
+
+            var texto = Encoding.UTF8.GetString(datos).Split('|', 2);
+            if (texto.Length != 2 || !int.TryParse(texto[0], out var empresaId)) return false;
+            var email = texto[1];
+            if (!await _db.HqMercadoBajas.AnyAsync(b => b.EmpresaId == empresaId && b.Email == email))
+            {
+                _db.HqMercadoBajas.Add(new HqMercadoBaja { EmpresaId = empresaId, Email = email, Origen = "Link", Fecha = DateTime.UtcNow });
+                await _db.SaveChangesAsync();
+            }
+            return true;
         }
 
         public async Task<MercadoPedidoPublicoDto?> ObtenerPedidoPublicoAsync(string token)
