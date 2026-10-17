@@ -122,7 +122,11 @@ DECLARE @EstId INT = (
     SELECT TOP 1 EstablecimientoId FROM dbo.AgroEstablecimientos WHERE EmpresaId = @EmpresaId AND Activo = 1 ORDER BY EstablecimientoId
 );
 
-IF @EmpresaId IS NULL OR @EstId IS NULL
+IF ISNULL(CAST(SESSION_CONTEXT(N'vordia_sin_demo') AS INT), 0) = 1
+BEGIN
+    PRINT 'Seed demo omitido (despliegue de producción)';
+END
+ELSE IF @EmpresaId IS NULL OR @EstId IS NULL
 BEGIN
     PRINT 'Seed omitido: no hay empresa/establecimiento Agrofield';
 END
@@ -362,7 +366,7 @@ GO
 DECLARE @EmpresaId INT = (SELECT TOP 1 EmpresaId FROM dbo.Empresas WHERE Rubro = N'AGRO' AND RazonSocial = N'Agrofield' ORDER BY EmpresaId);
 DECLARE @EstId INT = (SELECT TOP 1 EstablecimientoId FROM dbo.AgroEstablecimientos WHERE EmpresaId = @EmpresaId AND Activo = 1 ORDER BY EstablecimientoId);
 
-IF @EstId IS NOT NULL
+IF @EstId IS NOT NULL AND ISNULL(CAST(SESSION_CONTEXT(N'vordia_sin_demo') AS INT), 0) = 0
 BEGIN
     UPDATE dbo.AgroEstablecimientos SET Latitud = ISNULL(Latitud, -23.4425), Longitud = ISNULL(Longitud, -58.4438)
      WHERE EstablecimientoId = @EstId;

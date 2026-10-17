@@ -268,6 +268,8 @@ DECLARE @EmpresaId INT = (SELECT TOP 1 EmpresaId FROM dbo.Empresas WHERE Rubro =
 
 IF @EmpresaId IS NOT NULL
 
+   AND ISNULL(CAST(SESSION_CONTEXT(N'vordia_sin_demo') AS INT), 0) = 0
+
    AND OBJECT_ID(N'dbo.CrmObjetivos', N'U') IS NOT NULL
 
    AND NOT EXISTS (SELECT 1 FROM dbo.CrmObjetivos WHERE EmpresaId = @EmpresaId)
