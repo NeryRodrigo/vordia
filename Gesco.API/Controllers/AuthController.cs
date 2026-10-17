@@ -128,10 +128,11 @@ namespace Gesco.API.Controllers
             }
         }
 
-        [AllowAnonymous]
-        [EnableRateLimiting("auth")]
         private Task<bool> EsOperadorVordiaAsync(int empresaId) => _scope.EsOperadorVordiaAsync(empresaId);
 
+        // Lista pública para la pantalla de login (entorno de trabajo)
+        [AllowAnonymous]
+        [EnableRateLimiting("auth")]
         [HttpGet("empresas")]
         public async Task<IActionResult> GetEmpresas()
         {
