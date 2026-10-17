@@ -260,7 +260,9 @@ DECLARE @EmpresaId INT = (SELECT TOP 1 EmpresaId FROM dbo.Empresas WHERE Rubro =
 IF @EmpresaId IS NULL
     SET @EmpresaId = (SELECT TOP 1 EmpresaId FROM dbo.Empresas ORDER BY EmpresaId);
 
-IF @EmpresaId IS NOT NULL AND OBJECT_ID(N'dbo.AgroEstablecimientos', N'U') IS NOT NULL
+-- Datos demo: se omiten cuando el despliegue de producción activa 'vordia_sin_demo'
+IF ISNULL(CAST(SESSION_CONTEXT(N'vordia_sin_demo') AS INT), 0) = 0
+   AND @EmpresaId IS NOT NULL AND OBJECT_ID(N'dbo.AgroEstablecimientos', N'U') IS NOT NULL
    AND NOT EXISTS (SELECT 1 FROM dbo.AgroEstablecimientos WHERE EmpresaId=@EmpresaId AND ClienteNombre=N'Agrofield')
 BEGIN
     DECLARE @EstId INT, @L1 INT, @L2 INT, @L3 INT;
