@@ -149,6 +149,8 @@ builder.Services.AddControllers(options =>
         .RequireAuthenticatedUser()
         .Build();
     options.Filters.Add(new AuthorizeFilter(policy));
+    // Cada usuario solo opera sobre su empresa (salvo el equipo operador de VORDIA)
+    options.Filters.Add<Gesco.API.Services.EmpresaScopeFilter>();
 }).AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
@@ -187,12 +189,20 @@ builder.Services.AddHttpClient<IAiMappingService, Gesco.Application.Services.AiM
 builder.Services.AddScoped<IPaymentGatewayService, Gesco.Application.Services.StripePaymentService>();
 builder.Services.AddScoped<IPaymentGatewayService, Gesco.Application.Services.BancardPaymentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<Gesco.API.Services.IEmpresaScope, Gesco.API.Services.EmpresaScope>();
+builder.Services.AddScoped<Gesco.API.Services.EmpresaScopeFilter>();
 builder.Services.AddScoped<IModuloService, ModuloService>();
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 builder.Services.AddScoped<IHabitacionService, HabitacionService>();
 builder.Services.AddScoped<IReservaService, ReservaService>();
 builder.Services.AddScoped<IStayService, StayService>();
 builder.Services.AddScoped<IAgroService, AgroService>();
+builder.Services.AddScoped<IMercadoVentasService, MercadoVentasService>();
+builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(45);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("VordiaHQ-MercadoRadar/1.0 (+https://vordia.com.py)");
+});
 builder.Services.AddScoped<IUnidadCondominioService, UnidadCondominioService>();
 builder.Services.AddScoped<IContratoInquilinoService, ContratoInquilinoService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
@@ -223,6 +233,7 @@ builder.Services.AddHttpClient<IAndeJwtConsultaService, AndeJwtConsultaService>(
 });
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.AlquilerAlertasBackgroundService>();
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.CrmAutomatizacionesBackgroundService>();
+builder.Services.AddHostedService<Gesco.API.BackgroundServices.MercadoRadarBackgroundService>();
 
 builder.Services.AddDbContext<GescoDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

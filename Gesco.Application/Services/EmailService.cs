@@ -373,6 +373,99 @@ namespace Gesco.Application.Services
             }
         }
 
+        public async Task<(bool Enviado, string? Error)> EnviarCorreoComercialAsync(
+            string emailDestino,
+            string asunto,
+            string mensaje,
+            string? responderA = null,
+            string? bajaUrl = null)
+        {
+            try
+            {
+                var smtpServer = _config["EmailSettings:SmtpServer"] ?? "smtp.gmail.com";
+                var smtpPort = int.Parse(_config["EmailSettings:SmtpPort"] ?? "587");
+                var senderEmail = _config["EmailSettings:SenderEmail"];
+                var appPassword = LimpiarAppPassword(_config["EmailSettings:AppPassword"]);
+
+                if (string.IsNullOrEmpty(senderEmail) || string.IsNullOrEmpty(appPassword))
+                    return (false, "No están configuradas las credenciales SMTP (EmailSettings) en el servidor.");
+                if (string.IsNullOrWhiteSpace(emailDestino) || !emailDestino.Contains('@'))
+                    return (false, "El correo del cliente no es válido.");
+
+                using var message = new MailMessage
+                {
+                    From = new MailAddress(senderEmail, "Vordia"),
+                    Subject = asunto,
+                    IsBodyHtml = true,
+                    Body = GenerarCorreoComercialHtml(mensaje, bajaUrl)
+                };
+                if (!string.IsNullOrWhiteSpace(bajaUrl))
+                    message.Headers.Add("List-Unsubscribe", $"<{bajaUrl}>");
+                message.To.Add(new MailAddress(emailDestino.Trim()));
+                if (!string.IsNullOrWhiteSpace(responderA) && responderA.Contains('@'))
+                    message.ReplyToList.Add(new MailAddress(responderA.Trim()));
+
+                using var smtpClient = new SmtpClient(smtpServer, smtpPort)
+                {
+                    Credentials = new NetworkCredential(senderEmail, appPassword),
+                    EnableSsl = true,
+                    Timeout = 25000
+                };
+
+                await smtpClient.SendMailAsync(message);
+                return (true, null);
+            }
+            catch (SmtpException ex)
+            {
+                Console.WriteLine($"Error enviando correo comercial: {ex}");
+                return (false, $"SMTP {ex.StatusCode}: {ex.Message}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error enviando correo comercial: {ex}");
+                return (false, ex.Message);
+            }
+        }
+
+        private static string GenerarCorreoComercialHtml(string mensaje, string? bajaUrl)
+        {
+            // Comunicación comercial identificada y con baja simple (Ley 4868/2013 de comercio electrónico)
+            var baja = string.IsNullOrWhiteSpace(bajaUrl)
+                ? "Si no querés recibir más mensajes, respondé este correo con la palabra BAJA."
+                : $"Si no querés recibir más mensajes, <a href='{System.Net.WebUtility.HtmlEncode(bajaUrl)}' style='color:#7c8db5;'>date de baja con un clic</a> o respondé con la palabra BAJA.";
+            // Los links quedan clickeables (por ejemplo el del pedido para aceptar)
+            var cuerpo = System.Text.RegularExpressions.Regex.Replace(
+                System.Net.WebUtility.HtmlEncode(mensaje),
+                @"(https?://[^\s<]+)",
+                "<a href='$1' style='color:#007bff;font-weight:600;'>$1</a>").Replace("\n", "<br/>");
+
+            return $@"
+<!DOCTYPE html>
+<html lang='es'>
+<head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'></head>
+<body style='margin:0;padding:24px;background:#f3f5fa;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;'>
+  <table role='presentation' width='100%' cellpadding='0' cellspacing='0' style='max-width:580px;margin:0 auto;background:#ffffff;border:1px solid #e3e8f2;border-radius:16px;overflow:hidden;'>
+    <tr>
+      <td style='padding:18px 24px;background:#050B18;'>
+        <div style='color:#ffffff;font-size:18px;font-weight:700;letter-spacing:3px;'>VORDIA</div>
+        <div style='color:#7c8db5;font-size:12px;margin-top:2px;'>Sistemas de gestión listos para tu negocio</div>
+      </td>
+    </tr>
+    <tr>
+      <td style='padding:24px;color:#1f2a44;font-size:15px;line-height:1.65;'>{cuerpo}</td>
+    </tr>
+    <tr>
+      <td style='padding:16px 24px;border-top:1px solid #e3e8f2;color:#7c8db5;font-size:12px;'>
+        <div>Comunicación comercial de VORDIA · <a href='https://www.vordia.com.py' style='color:#7c8db5;'>www.vordia.com.py</a> · Asunción, Paraguay.</div>
+        <div style='margin-top:6px;'>Te escribimos porque tu organización publicó un pedido o llamado público relacionado con sistemas de gestión. {baja}</div>
+        <div style='margin-top:6px;'><a href='https://www.vordia.com.py/privacidad' style='color:#7c8db5;'>Política de privacidad</a></div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>";
+        }
+
         private static string GenerarNotificacionHqHtml(string asunto, string mensaje)
         {
             var cuerpo = System.Net.WebUtility.HtmlEncode(mensaje).Replace("\n", "<br/>");

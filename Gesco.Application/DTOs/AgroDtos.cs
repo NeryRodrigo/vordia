@@ -46,6 +46,18 @@ namespace Gesco.Application.DTOs
         public DateTime? UltimaUbicacionAt { get; set; }
         public int? BateriaCollarPct { get; set; }
         public string? Notas { get; set; }
+        public string Etapa { get; set; } = "";
+        public DateTime? FechaEtapa { get; set; }
+        public string? Raza { get; set; }
+        public DateTime? FechaNacimiento { get; set; }
+        public decimal? PesoNacimientoKg { get; set; }
+        public string? MadreCodigo { get; set; }
+        public string? PadreCodigo { get; set; }
+        /// <summary>Objetivo efectivo: animal, luego lote, luego configuración.</summary>
+        public decimal? PesoObjetivoKg { get; set; }
+        public int? DiasParaObjetivo { get; set; }
+        public bool ListoParaVenta { get; set; }
+        public DateTime? RetiroSanitarioHasta { get; set; }
     }
 
     public class AgroAnimalUpsertRequest
@@ -63,6 +75,13 @@ namespace Gesco.Application.DTOs
         public decimal? PesoActualKg { get; set; }
         public string Estado { get; set; } = "Activo";
         public string? Notas { get; set; }
+        public string? Etapa { get; set; }
+        public string? Raza { get; set; }
+        public DateTime? FechaNacimiento { get; set; }
+        public decimal? PesoNacimientoKg { get; set; }
+        public string? MadreCodigo { get; set; }
+        public string? PadreCodigo { get; set; }
+        public decimal? PesoObjetivoKg { get; set; }
     }
 
     public class AgroPesajeDto
@@ -123,6 +142,8 @@ namespace Gesco.Application.DTOs
         public int Capacidad { get; set; }
         public string? CamaraCodigo { get; set; }
         public int Animales { get; set; }
+        public string? Etapa { get; set; }
+        public decimal? PesoObjetivoKg { get; set; }
     }
 
     public class AgroDispositivoDto
