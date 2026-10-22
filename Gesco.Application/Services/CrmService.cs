@@ -145,11 +145,16 @@ namespace Gesco.Application.Services
             var gestion = EtiquetaGestion(request.GestionActual);
             var horario = string.IsNullOrWhiteSpace(request.HorarioContacto) ? null : request.HorarioContacto.Trim();
             var necesidad = string.IsNullOrWhiteSpace(request.Necesidad) ? null : request.Necesidad.Trim();
+            var herramienta = string.IsNullOrWhiteSpace(request.Herramienta) ? null : request.Herramienta.Trim();
+            var tituloSolicitud = herramienta != null
+                ? $"Informe pedido desde {herramienta}"
+                : "Solicitud de demostración desde la web";
 
             var detalle = string.Join(
                 Environment.NewLine,
                 new[]
                 {
+                    herramienta != null ? $"Herramienta: {herramienta}" : null,
                     $"Nombre: {nombre}",
                     cargo != null ? $"Cargo: {cargo}" : null,
                     $"Empresa: {request.Empresa.Trim()}",
@@ -195,7 +200,7 @@ namespace Gesco.Application.Services
                     ClienteId = existente.ClienteId,
                     EmpresaId = empresaId,
                     Tipo = "nota",
-                    Titulo = "Nueva solicitud desde la web",
+                    Titulo = herramienta != null ? tituloSolicitud : "Nueva solicitud desde la web",
                     Detalle = detalle,
                     Fecha = DateTime.UtcNow,
                     UsuarioNombre = "Formulario web"
@@ -219,7 +224,7 @@ namespace Gesco.Application.Services
                 SistemaServicio = solucion,
                 ProximosPasos = horario != null
                     ? $"Contactar — {horario}"
-                    : "Contactar — solicitud entrante desde la web",
+                    : herramienta != null ? $"Enviar informe — {herramienta}" : "Contactar — solicitud entrante desde la web",
                 Notas = string.IsNullOrWhiteSpace(notasFicha) ? null : notasFicha,
                 Origen = "web",
                 OrigenDetalle = codigo,
@@ -236,7 +241,7 @@ namespace Gesco.Application.Services
                 ClienteId = entity.ClienteId,
                 EmpresaId = empresaId,
                 Tipo = "cambio_estado",
-                Titulo = "Solicitud de demostración desde la web",
+                Titulo = tituloSolicitud,
                 Detalle = detalle,
                 EstadoNuevo = entity.EstadoPipeline,
                 Fecha = DateTime.UtcNow,

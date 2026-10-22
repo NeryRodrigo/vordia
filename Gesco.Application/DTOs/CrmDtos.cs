@@ -109,6 +109,10 @@ namespace Gesco.Application.DTOs
         [StringLength(2000)]
         public string? Necesidad { get; set; }
 
+        /// <summary>Herramienta gratuita del sitio desde la que llegó (ej. "Calculadora de morosidad"); vacío = formulario de demo.</summary>
+        [StringLength(80)]
+        public string? Herramienta { get; set; }
+
         /// <summary>Campo trampa: los bots lo completan, las personas no lo ven.</summary>
         public string? Sitio { get; set; }
     }
