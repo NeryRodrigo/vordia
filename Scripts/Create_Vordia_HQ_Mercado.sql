@@ -269,4 +269,36 @@ BEGIN
 END
 GO
 
+/* ========== v7: ESTUDIO DE PRECIOS (Van Westendorp + Gabor-Granger) ========== */
+IF OBJECT_ID(N'dbo.HqEstudioPreciosRespuestas', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqEstudioPreciosRespuestas (
+        RespuestaId       INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqEstudioPrecios PRIMARY KEY,
+        EmpresaId         INT NOT NULL,
+        Producto          NVARCHAR(20) NOT NULL,
+        Origen            NVARCHAR(60) NULL,
+        Tamano            INT NULL,
+        Ciudad            NVARCHAR(80) NULL,
+        HerramientaActual NVARCHAR(40) NULL,
+        GastoActualGs     DECIMAL(18,2) NULL,
+        ProblemaPrincipal NVARCHAR(80) NULL,
+        Decisor           NVARCHAR(20) NULL,
+        MuyBaratoGs       DECIMAL(18,2) NOT NULL,
+        BaratoGs          DECIMAL(18,2) NOT NULL,
+        CaroGs            DECIMAL(18,2) NOT NULL,
+        MuyCaroGs         DECIMAL(18,2) NOT NULL,
+        PrecioMostradoGs  DECIMAL(18,2) NOT NULL,
+        IntencionCompra   INT NOT NULL,
+        Comentario        NVARCHAR(1000) NULL,
+        ContactoNombre    NVARCHAR(150) NULL,
+        ContactoEmpresa   NVARCHAR(150) NULL,
+        ContactoDato      NVARCHAR(150) NULL,
+        AceptaContacto    BIT NOT NULL CONSTRAINT DF_HqEstudioPrecios_Acepta DEFAULT (0),
+        Fecha             DATETIME2 NOT NULL CONSTRAINT DF_HqEstudioPrecios_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_HqEstudioPrecios_Producto ON dbo.HqEstudioPreciosRespuestas (EmpresaId, Producto, Fecha);
+    PRINT 'Tabla HqEstudioPreciosRespuestas creada';
+END
+GO
+
 PRINT '=== VORDIA HQ · Necesidades del Mercado listo ===';

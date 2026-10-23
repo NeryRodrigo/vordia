@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -240,7 +241,28 @@ builder.Services.AddDbContext<GescoDbContext>(options =>
 
 builder.Services.AddScoped<IApplicationDbContext>(provider => provider.GetRequiredService<GescoDbContext>());
 
+// Detrás de Nginx: la IP real del visitante llega en X-Forwarded-For. Solo se confía en proxies de redes
+// privadas (Docker); un pedido directo desde internet no puede falsear su IP para saltar los límites.
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    o.KnownNetworks.Clear();
+    o.KnownProxies.Clear();
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("10.0.0.0"), 8));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("172.16.0.0"), 12));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("192.168.0.0"), 16));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("127.0.0.0"), 8));
+    // Kestrel en Docker escucha en IPv6: las IPv4 privadas pueden llegar como ::ffff:x.x.x.x
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("::ffff:10.0.0.0"), 104));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("::ffff:172.16.0.0"), 108));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("::ffff:192.168.0.0"), 112));
+    o.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(System.Net.IPAddress.Parse("::ffff:127.0.0.0"), 104));
+    o.KnownProxies.Add(System.Net.IPAddress.IPv6Loopback);
+});
+
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 app.UseCors("GescoPolicy");
 
