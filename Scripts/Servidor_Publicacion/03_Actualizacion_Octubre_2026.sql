@@ -2188,6 +2188,73 @@ BEGIN
 END
 GO
 
+/* ========== v8: SECUENCIAS DE CORREO CON IA ========== */
+IF OBJECT_ID(N'dbo.HqSecuencias', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuencias (
+        SecuenciaId    INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuencias PRIMARY KEY,
+        EmpresaId      INT NOT NULL,
+        Nombre         NVARCHAR(120) NOT NULL,
+        Producto       NVARCHAR(20) NOT NULL,
+        Oferta         NVARCHAR(1000) NOT NULL,
+        Firma          NVARCHAR(120) NOT NULL,
+        ResponderA     NVARCHAR(150) NULL,
+        Pasos          INT NOT NULL CONSTRAINT DF_HqSecuencias_Pasos DEFAULT (3),
+        DiasEntrePasos INT NOT NULL CONSTRAINT DF_HqSecuencias_Dias DEFAULT (3),
+        LimiteDiario   INT NOT NULL CONSTRAINT DF_HqSecuencias_Limite DEFAULT (30),
+        Activa         BIT NOT NULL CONSTRAINT DF_HqSecuencias_Activa DEFAULT (0),
+        FechaCreacion  DATETIME2 NOT NULL CONSTRAINT DF_HqSecuencias_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    PRINT 'Tabla HqSecuencias creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.HqSecuenciaContactos', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuenciaContactos (
+        ContactoId   INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuenciaContactos PRIMARY KEY,
+        EmpresaId    INT NOT NULL,
+        SecuenciaId  INT NOT NULL CONSTRAINT FK_HqSecContactos_Secuencia REFERENCES dbo.HqSecuencias(SecuenciaId),
+        ClienteId    INT NULL,
+        NecesidadId  INT NULL,
+        Email        NVARCHAR(150) NOT NULL,
+        Nombre       NVARCHAR(150) NULL,
+        Empresa      NVARCHAR(200) NULL,
+        Contexto     NVARCHAR(2000) NULL,
+        Estado       NVARCHAR(20) NOT NULL CONSTRAINT DF_HqSecContactos_Estado DEFAULT (N'Borrador'),
+        PasoActual   INT NOT NULL CONSTRAINT DF_HqSecContactos_Paso DEFAULT (0),
+        Asunto       NVARCHAR(200) NULL,
+        Cuerpo       NVARCHAR(MAX) NULL,
+        ProximoEnvio DATETIME2 NULL,
+        UltimoEnvio  DATETIME2 NULL,
+        Detalle      NVARCHAR(300) NULL,
+        FechaAlta    DATETIME2 NOT NULL CONSTRAINT DF_HqSecContactos_Alta DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE UNIQUE INDEX UX_HqSecContactos_Email ON dbo.HqSecuenciaContactos (SecuenciaId, Email);
+    CREATE INDEX IX_HqSecContactos_Proximo ON dbo.HqSecuenciaContactos (Estado, ProximoEnvio);
+    PRINT 'Tabla HqSecuenciaContactos creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.HqSecuenciaEnvios', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuenciaEnvios (
+        EnvioId     INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuenciaEnvios PRIMARY KEY,
+        EmpresaId   INT NOT NULL,
+        SecuenciaId INT NOT NULL,
+        ContactoId  INT NOT NULL,
+        Paso        INT NOT NULL,
+        Asunto      NVARCHAR(200) NOT NULL,
+        Cuerpo      NVARCHAR(MAX) NOT NULL,
+        Resultado   NVARCHAR(20) NOT NULL,
+        Detalle     NVARCHAR(300) NULL,
+        Fecha       DATETIME2 NOT NULL CONSTRAINT DF_HqSecEnvios_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_HqSecEnvios_Secuencia ON dbo.HqSecuenciaEnvios (SecuenciaId, Fecha);
+    PRINT 'Tabla HqSecuenciaEnvios creada';
+END
+GO
+
 PRINT '=== VORDIA HQ · Necesidades del Mercado listo ===';
 GO
 

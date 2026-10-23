@@ -367,6 +367,8 @@ namespace Gesco.Application.Services
             return $"{B64Url(datos)}.{B64Url(h.ComputeHash(datos)[..16])}";
         }
 
+        public string UrlBaja(int empresaId, string email) => $"{SitioPublico}/baja/{TokenBaja(empresaId, email)}";
+
         public async Task<bool> RegistrarBajaAsync(string token)
         {
             var partes = (token ?? "").Split('.');

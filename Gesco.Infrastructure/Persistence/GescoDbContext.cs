@@ -98,6 +98,9 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<HqMercadoPedido> HqMercadoPedidos { get; set; }
         public DbSet<HqMercadoBaja> HqMercadoBajas { get; set; }
         public DbSet<HqEstudioPrecioRespuesta> HqEstudioPreciosRespuestas { get; set; }
+        public DbSet<HqSecuencia> HqSecuencias { get; set; }
+        public DbSet<HqSecuenciaContacto> HqSecuenciaContactos { get; set; }
+        public DbSet<HqSecuenciaEnvio> HqSecuenciaEnvios { get; set; }
 
         public DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }

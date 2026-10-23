@@ -2,7 +2,7 @@
   VORDIA · Verificación completa del esquema contra el modelo de la API (generado desde EF Core).
   Solo lee: no modifica nada. Correlo antes y después de los scripts de despliegue.
   Resultado vacío en "Faltantes" = la base tiene todo lo que la API usa.
-  Generado: 22/10/2026 · 85 tablas · 966 columnas.
+  Generado: 23/10/2026 · 88 tablas · 1005 columnas.
 */
 USE GESCO_DB;
 GO
@@ -509,7 +509,8 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqMercadoNecesidades', N'Competidores'),
     (N'HqMercadoNecesidades', N'Alcance'),
     (N'HqMercadoNecesidades', N'Estado'),
-    (N'HqMercadoNecesidades', N'ResponsableNombre'),
+    (N'HqMercadoNecesidades', N'ResponsableNombre');
+INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqMercadoNecesidades', N'ContactoNombre'),
     (N'HqMercadoNecesidades', N'ContactoEmail'),
     (N'HqMercadoNecesidades', N'ContactoTelefono'),
@@ -546,6 +547,45 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqMercadoPedidos', N'UsuarioNombre'),
     (N'HqMercadoPedidos', N'FechaCreacion'),
     (N'HqMercadoPedidos', N'Activo'),
+    (N'HqSecuenciaContactos', N'ContactoId'),
+    (N'HqSecuenciaContactos', N'EmpresaId'),
+    (N'HqSecuenciaContactos', N'SecuenciaId'),
+    (N'HqSecuenciaContactos', N'ClienteId'),
+    (N'HqSecuenciaContactos', N'NecesidadId'),
+    (N'HqSecuenciaContactos', N'Email'),
+    (N'HqSecuenciaContactos', N'Nombre'),
+    (N'HqSecuenciaContactos', N'Empresa'),
+    (N'HqSecuenciaContactos', N'Contexto'),
+    (N'HqSecuenciaContactos', N'Estado'),
+    (N'HqSecuenciaContactos', N'PasoActual'),
+    (N'HqSecuenciaContactos', N'Asunto'),
+    (N'HqSecuenciaContactos', N'Cuerpo'),
+    (N'HqSecuenciaContactos', N'ProximoEnvio'),
+    (N'HqSecuenciaContactos', N'UltimoEnvio'),
+    (N'HqSecuenciaContactos', N'Detalle'),
+    (N'HqSecuenciaContactos', N'FechaAlta'),
+    (N'HqSecuenciaEnvios', N'EnvioId'),
+    (N'HqSecuenciaEnvios', N'EmpresaId'),
+    (N'HqSecuenciaEnvios', N'SecuenciaId'),
+    (N'HqSecuenciaEnvios', N'ContactoId'),
+    (N'HqSecuenciaEnvios', N'Paso'),
+    (N'HqSecuenciaEnvios', N'Asunto'),
+    (N'HqSecuenciaEnvios', N'Cuerpo'),
+    (N'HqSecuenciaEnvios', N'Resultado'),
+    (N'HqSecuenciaEnvios', N'Detalle'),
+    (N'HqSecuenciaEnvios', N'Fecha'),
+    (N'HqSecuencias', N'SecuenciaId'),
+    (N'HqSecuencias', N'EmpresaId'),
+    (N'HqSecuencias', N'Nombre'),
+    (N'HqSecuencias', N'Producto'),
+    (N'HqSecuencias', N'Oferta'),
+    (N'HqSecuencias', N'Firma'),
+    (N'HqSecuencias', N'ResponderA'),
+    (N'HqSecuencias', N'Pasos'),
+    (N'HqSecuencias', N'DiasEntrePasos'),
+    (N'HqSecuencias', N'LimiteDiario'),
+    (N'HqSecuencias', N'Activa'),
+    (N'HqSecuencias', N'FechaCreacion'),
     (N'MapeoPerfiles', N'MapeoPerfilId'),
     (N'MapeoPerfiles', N'NombrePerfil'),
     (N'MapeoPerfiles', N'TablaDestino'),
@@ -970,7 +1010,8 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'PagosRecibo', N'ComprobanteUrl'),
     (N'PagosRecibo', N'NroComprobante'),
     (N'PagosRecibo', N'Banco'),
-    (N'PagosRecibo', N'Notas'),
+    (N'PagosRecibo', N'Notas');
+INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'PagosRecibo', N'ResponsableCobro'),
     (N'SeguimientosMorosidad', N'SeguimientoId'),
     (N'SeguimientosMorosidad', N'CuotaId'),
