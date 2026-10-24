@@ -100,6 +100,9 @@ namespace Gesco.Application.Interfaces
         DbSet<HqSecuencia> HqSecuencias { get; set; }
         DbSet<HqSecuenciaContacto> HqSecuenciaContactos { get; set; }
         DbSet<HqSecuenciaEnvio> HqSecuenciaEnvios { get; set; }
+        DbSet<ContaCliente> ContaClientes { get; set; }
+        DbSet<ContaComprobante> ContaComprobantes { get; set; }
+        DbSet<ContaExportacion> ContaExportaciones { get; set; }
 
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }

@@ -132,6 +132,16 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(10),
                 QueueLimit = 0
             }));
+    // Portal del cliente de CONTA: sube facturas desde el celular sin cuenta
+    options.AddPolicy("portal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0
+            }));
     options.AddPolicy("uploads", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -202,6 +212,8 @@ builder.Services.AddScoped<IMercadoVentasService, MercadoVentasService>();
 // Secuencias de correo con redacción por IA gratuita sin tarjeta (Groq y OpenRouter) y envío en horario hábil
 builder.Services.AddHttpClient<IRedaccionIaService, RedaccionIaService>(c => c.Timeout = TimeSpan.FromSeconds(40));
 builder.Services.AddScoped<ISecuenciasService, SecuenciasService>();
+// VORDIA CONTA (estudios contables)
+builder.Services.AddScoped<Gesco.Application.Services.Conta.ContaService>();
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.SecuenciasBackgroundService>();
 builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>
 {

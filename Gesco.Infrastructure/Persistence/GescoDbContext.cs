@@ -101,6 +101,9 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<HqSecuencia> HqSecuencias { get; set; }
         public DbSet<HqSecuenciaContacto> HqSecuenciaContactos { get; set; }
         public DbSet<HqSecuenciaEnvio> HqSecuenciaEnvios { get; set; }
+        public DbSet<ContaCliente> ContaClientes { get; set; }
+        public DbSet<ContaComprobante> ContaComprobantes { get; set; }
+        public DbSet<ContaExportacion> ContaExportaciones { get; set; }
 
         public DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }

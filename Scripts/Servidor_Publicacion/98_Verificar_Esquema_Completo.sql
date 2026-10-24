@@ -2,7 +2,7 @@
   VORDIA · Verificación completa del esquema contra el modelo de la API (generado desde EF Core).
   Solo lee: no modifica nada. Correlo antes y después de los scripts de despliegue.
   Resultado vacío en "Faltantes" = la base tiene todo lo que la API usa.
-  Generado: 23/10/2026 · 88 tablas · 1005 columnas.
+  Generado: 24/10/2026 · 91 tablas · 1061 columnas.
 */
 USE GESCO_DB;
 GO
@@ -202,6 +202,62 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'ConfiguracionesMultas', N'MontoMulta'),
     (N'ConfiguracionesMultas', N'TipoAplicacion'),
     (N'ConfiguracionesMultas', N'DiasGracia'),
+    (N'ContaClientes', N'ClienteId'),
+    (N'ContaClientes', N'EmpresaId'),
+    (N'ContaClientes', N'RazonSocial'),
+    (N'ContaClientes', N'Ruc'),
+    (N'ContaClientes', N'Dv'),
+    (N'ContaClientes', N'Regimen'),
+    (N'ContaClientes', N'ObligacionIva'),
+    (N'ContaClientes', N'ObligacionIre'),
+    (N'ContaClientes', N'ObligacionIrp'),
+    (N'ContaClientes', N'ContactoNombre'),
+    (N'ContaClientes', N'ContactoWhatsapp'),
+    (N'ContaClientes', N'ContactoEmail'),
+    (N'ContaClientes', N'TokenPortal'),
+    (N'ContaClientes', N'Activo'),
+    (N'ContaClientes', N'FechaAlta'),
+    (N'ContaComprobantes', N'ComprobanteId'),
+    (N'ContaComprobantes', N'EmpresaId'),
+    (N'ContaComprobantes', N'ClienteId'),
+    (N'ContaComprobantes', N'Tipo'),
+    (N'ContaComprobantes', N'Origen'),
+    (N'ContaComprobantes', N'Electronico'),
+    (N'ContaComprobantes', N'Cdc'),
+    (N'ContaComprobantes', N'TipoComprobante'),
+    (N'ContaComprobantes', N'Timbrado'),
+    (N'ContaComprobantes', N'Numero'),
+    (N'ContaComprobantes', N'Fecha'),
+    (N'ContaComprobantes', N'Credito'),
+    (N'ContaComprobantes', N'ContraparteTipoId'),
+    (N'ContaComprobantes', N'ContraparteDoc'),
+    (N'ContaComprobantes', N'ContraparteDv'),
+    (N'ContaComprobantes', N'ContraparteNombre'),
+    (N'ContaComprobantes', N'Gravado10'),
+    (N'ContaComprobantes', N'Gravado5'),
+    (N'ContaComprobantes', N'Exento'),
+    (N'ContaComprobantes', N'Total'),
+    (N'ContaComprobantes', N'Iva10'),
+    (N'ContaComprobantes', N'Iva5'),
+    (N'ContaComprobantes', N'NumeroAsociado'),
+    (N'ContaComprobantes', N'TimbradoAsociado'),
+    (N'ContaComprobantes', N'ImputaIva'),
+    (N'ContaComprobantes', N'ImputaIre'),
+    (N'ContaComprobantes', N'ImputaIrp'),
+    (N'ContaComprobantes', N'Estado'),
+    (N'ContaComprobantes', N'Observaciones'),
+    (N'ContaComprobantes', N'Periodo'),
+    (N'ContaComprobantes', N'ArchivoNombre'),
+    (N'ContaComprobantes', N'CargadoPor'),
+    (N'ContaComprobantes', N'FechaCarga'),
+    (N'ContaExportaciones', N'ExportacionId'),
+    (N'ContaExportaciones', N'EmpresaId'),
+    (N'ContaExportaciones', N'ClienteId'),
+    (N'ContaExportaciones', N'Periodo'),
+    (N'ContaExportaciones', N'Archivo'),
+    (N'ContaExportaciones', N'Filas'),
+    (N'ContaExportaciones', N'GeneradoPor'),
+    (N'ContaExportaciones', N'Fecha'),
     (N'CrmAutomatizaciones', N'AutomatizacionId'),
     (N'CrmAutomatizaciones', N'EmpresaId'),
     (N'CrmAutomatizaciones', N'Nombre'),
@@ -453,7 +509,8 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqEstudioPreciosRespuestas', N'MuyCaroGs'),
     (N'HqEstudioPreciosRespuestas', N'PrecioMostradoGs'),
     (N'HqEstudioPreciosRespuestas', N'IntencionCompra'),
-    (N'HqEstudioPreciosRespuestas', N'Comentario'),
+    (N'HqEstudioPreciosRespuestas', N'Comentario');
+INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqEstudioPreciosRespuestas', N'ContactoNombre'),
     (N'HqEstudioPreciosRespuestas', N'ContactoEmpresa'),
     (N'HqEstudioPreciosRespuestas', N'ContactoDato'),
@@ -509,8 +566,7 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'HqMercadoNecesidades', N'Competidores'),
     (N'HqMercadoNecesidades', N'Alcance'),
     (N'HqMercadoNecesidades', N'Estado'),
-    (N'HqMercadoNecesidades', N'ResponsableNombre');
-INSERT INTO @Modelo (Tabla, Columna) VALUES
+    (N'HqMercadoNecesidades', N'ResponsableNombre'),
     (N'HqMercadoNecesidades', N'ContactoNombre'),
     (N'HqMercadoNecesidades', N'ContactoEmail'),
     (N'HqMercadoNecesidades', N'ContactoTelefono'),
@@ -954,7 +1010,8 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'Reservas', N'MontoPagadoGs'),
     (N'Reservas', N'FechaCreacion'),
     (N'Reservas', N'OrigenReserva'),
-    (N'Reservas', N'NotasAdicionales'),
+    (N'Reservas', N'NotasAdicionales');
+INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'UsuarioModulos', N'UsuarioId'),
     (N'UsuarioModulos', N'ModuloId'),
     (N'DocumentoPropiedades', N'DocumentoPropiedadId'),
@@ -1010,8 +1067,7 @@ INSERT INTO @Modelo (Tabla, Columna) VALUES
     (N'PagosRecibo', N'ComprobanteUrl'),
     (N'PagosRecibo', N'NroComprobante'),
     (N'PagosRecibo', N'Banco'),
-    (N'PagosRecibo', N'Notas');
-INSERT INTO @Modelo (Tabla, Columna) VALUES
+    (N'PagosRecibo', N'Notas'),
     (N'PagosRecibo', N'ResponsableCobro'),
     (N'SeguimientosMorosidad', N'SeguimientoId'),
     (N'SeguimientosMorosidad', N'CuotaId'),

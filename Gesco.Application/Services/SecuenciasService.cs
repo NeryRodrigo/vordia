@@ -66,7 +66,7 @@ namespace Gesco.Application.Services
     /// </summary>
     public class SecuenciasService : ISecuenciasService
     {
-        private static readonly string[] Productos = { "HABITAT", "STAY", "DINE", "RETAIL", "BOUTIQUE", "OPS", "AGRO" };
+        private static readonly string[] Productos = { "HABITAT", "STAY", "DINE", "RETAIL", "BOUTIQUE", "OPS", "AGRO", "CONTA" };
         /// <summary>Por pasada del motor (cada 15 minutos) para repartir los envíos en el día.</summary>
         private const int EnviosPorPasada = 5;
 

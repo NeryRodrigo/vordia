@@ -17,7 +17,7 @@ namespace Gesco.API.Controllers
     [ApiController]
     public class EstudioPreciosController : ControllerBase
     {
-        private static readonly string[] Productos = { "habitat", "stay", "dine", "retail", "boutique", "ops", "agro" };
+        private static readonly string[] Productos = { "habitat", "stay", "dine", "retail", "boutique", "ops", "agro", "conta" };
         private readonly IApplicationDbContext _db;
 
         public EstudioPreciosController(IApplicationDbContext db) => _db = db;
