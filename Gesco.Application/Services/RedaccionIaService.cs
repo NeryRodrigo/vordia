@@ -18,57 +18,83 @@ namespace Gesco.Application.Services
     public interface IRedaccionIaService
     {
         bool Configurada { get; }
+        /// <summary>Proveedores con clave cargada, en orden de uso (ej. "Groq, OpenRouter").</summary>
+        string Proveedores { get; }
         Task<CorreoRedactado> RedactarAsync(DatosRedaccion d, CancellationToken ct = default);
     }
 
     /// <summary>
-    /// Redacta correos comerciales con Gemini (plan gratuito de Google AI Studio). Clave en "Ia:GeminiApiKey"
-    /// y modelo en "Ia:Modelo". Sin clave, o si la IA falla, usa una plantilla fija para no frenar la secuencia.
-    /// Solo se envían datos de negocio (empresa, rubro, lo que pidió): nunca contraseñas ni datos sensibles.
+    /// Redacta correos comerciales con proveedores de IA en línea con plan gratuito que NO piden tarjeta
+    /// (sin tarjeta cargada no pueden cobrar): primero Groq ("Ia:Groq:ApiKey"), si falla o se agotó el cupo
+    /// del día, OpenRouter con modelos ":free" ("Ia:OpenRouter:ApiKey"), y si ninguno responde, una plantilla fija.
+    /// Ambos usan la API de chat compatible con OpenAI. Solo se envían datos de negocio, nunca datos sensibles.
     /// </summary>
-    public class GeminiRedaccionService : IRedaccionIaService
+    public class RedaccionIaService : IRedaccionIaService
     {
-        private readonly HttpClient _http;
-        private readonly string _apiKey;
-        private readonly string _modelo;
+        private record Proveedor(string Nombre, string Url, string ApiKey, string Modelo, bool JsonNativo);
 
-        public GeminiRedaccionService(HttpClient http, IConfiguration config)
+        private readonly HttpClient _http;
+        private readonly Proveedor[] _proveedores;
+
+        public RedaccionIaService(HttpClient http, IConfiguration config)
         {
             _http = http;
-            _apiKey = config["Ia:GeminiApiKey"] ?? "";
-            _modelo = string.IsNullOrWhiteSpace(config["Ia:Modelo"]) ? "gemini-2.5-flash" : config["Ia:Modelo"]!;
+            static string Val(IConfiguration c, string k, string def) => string.IsNullOrWhiteSpace(c[k]) ? def : c[k]!.Trim();
+            _proveedores = new[]
+            {
+                new Proveedor("Groq", "https://api.groq.com/openai/v1/chat/completions",
+                    config["Ia:Groq:ApiKey"] ?? "", Val(config, "Ia:Groq:Modelo", "llama-3.3-70b-versatile"), true),
+                new Proveedor("OpenRouter", "https://openrouter.ai/api/v1/chat/completions",
+                    config["Ia:OpenRouter:ApiKey"] ?? "", Val(config, "Ia:OpenRouter:Modelo", "meta-llama/llama-3.3-70b-instruct:free"), false),
+            }.Where(p => !string.IsNullOrWhiteSpace(p.ApiKey)).ToArray();
         }
 
-        public bool Configurada => !string.IsNullOrWhiteSpace(_apiKey);
+        public bool Configurada => _proveedores.Length > 0;
+        public string Proveedores => string.Join(", ", _proveedores.Select(p => p.Nombre));
 
         public async Task<CorreoRedactado> RedactarAsync(DatosRedaccion d, CancellationToken ct = default)
         {
-            if (!Configurada) return Plantilla(d);
+            foreach (var p in _proveedores)
+            {
+                var r = await IntentarAsync(p, Prompt(d), ct);
+                if (r != null) return r;
+            }
+            return Plantilla(d);
+        }
+
+        private async Task<CorreoRedactado?> IntentarAsync(Proveedor p, string prompt, CancellationToken ct)
+        {
             try
             {
-                var cuerpo = new
+                object cuerpo = p.JsonNativo
+                    ? new { model = p.Modelo, temperature = 0.7, response_format = new { type = "json_object" }, messages = new[] { new { role = "user", content = prompt } } }
+                    : new { model = p.Modelo, temperature = 0.7, messages = new[] { new { role = "user", content = prompt } } };
+                using var req = new HttpRequestMessage(HttpMethod.Post, p.Url) { Content = JsonContent.Create(cuerpo) };
+                req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", p.ApiKey);
+                if (p.Nombre == "OpenRouter")
                 {
-                    contents = new[] { new { role = "user", parts = new[] { new { text = Prompt(d) } } } },
-                    generationConfig = new { responseMimeType = "application/json", temperature = 0.7 }
-                };
-                using var req = new HttpRequestMessage(HttpMethod.Post,
-                    $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(_modelo)}:generateContent")
-                { Content = JsonContent.Create(cuerpo) };
-                req.Headers.Add("x-goog-api-key", _apiKey);
+                    req.Headers.Add("HTTP-Referer", "https://www.vordia.com.py");
+                    req.Headers.Add("X-Title", "VORDIA HQ");
+                }
                 using var res = await _http.SendAsync(req, ct);
-                if (!res.IsSuccessStatusCode) return Plantilla(d);
+                // 429 = cupo gratuito agotado, 402 = el proveedor pide saldo: se pasa al siguiente sin pagar nada
+                if (!res.IsSuccessStatusCode) return null;
 
                 using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
-                var texto = doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? "";
-                using var json = JsonDocument.Parse(texto);
+                var texto = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? "";
+                // Algunos modelos rodean el JSON con texto o ```: se toma del primer { al último }
+                var ini = texto.IndexOf('{');
+                var fin = texto.LastIndexOf('}');
+                if (ini < 0 || fin <= ini) return null;
+                using var json = JsonDocument.Parse(texto[ini..(fin + 1)]);
                 var asunto = json.RootElement.GetProperty("asunto").GetString()?.Trim();
-                var texto2 = json.RootElement.GetProperty("cuerpo").GetString()?.Trim();
-                if (string.IsNullOrWhiteSpace(asunto) || string.IsNullOrWhiteSpace(texto2)) return Plantilla(d);
-                return new CorreoRedactado(Recortar(asunto, 190), texto2, true);
+                var cuerpoCorreo = json.RootElement.GetProperty("cuerpo").GetString()?.Trim();
+                if (string.IsNullOrWhiteSpace(asunto) || string.IsNullOrWhiteSpace(cuerpoCorreo)) return null;
+                return new CorreoRedactado(Recortar(asunto, 190), cuerpoCorreo, true);
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException or IndexOutOfRangeException or System.Collections.Generic.KeyNotFoundException)
             {
-                return Plantilla(d);
+                return null;
             }
         }
 

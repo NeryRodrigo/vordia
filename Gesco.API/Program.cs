@@ -199,8 +199,8 @@ builder.Services.AddScoped<IReservaService, ReservaService>();
 builder.Services.AddScoped<IStayService, StayService>();
 builder.Services.AddScoped<IAgroService, AgroService>();
 builder.Services.AddScoped<IMercadoVentasService, MercadoVentasService>();
-// Secuencias de correo con redacción por IA (Gemini, plan gratuito) y envío automático en horario hábil
-builder.Services.AddHttpClient<IRedaccionIaService, GeminiRedaccionService>(c => c.Timeout = TimeSpan.FromSeconds(40));
+// Secuencias de correo con redacción por IA gratuita sin tarjeta (Groq y OpenRouter) y envío en horario hábil
+builder.Services.AddHttpClient<IRedaccionIaService, RedaccionIaService>(c => c.Timeout = TimeSpan.FromSeconds(40));
 builder.Services.AddScoped<ISecuenciasService, SecuenciasService>();
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.SecuenciasBackgroundService>();
 builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>

@@ -30,7 +30,7 @@ namespace Gesco.API.Controllers
 
         [HttpGet]
         public async Task<IActionResult> Listar([FromQuery] int empresaId) =>
-            Ok(new { iaConfigurada = _svc.IaConfigurada, secuencias = await _svc.ListarAsync(empresaId) });
+            Ok(new { iaConfigurada = _svc.IaConfigurada, iaProveedores = _svc.IaProveedores, secuencias = await _svc.ListarAsync(empresaId) });
 
         [HttpPost]
         public async Task<IActionResult> Crear([FromBody] SecuenciaRequest r)

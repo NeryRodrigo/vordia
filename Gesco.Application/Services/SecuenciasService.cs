@@ -56,6 +56,7 @@ namespace Gesco.Application.Services
         Task<int> AprobarTodosAsync(int secuenciaId, int empresaId);
         Task<ProcesoResultado> ProcesarAsync(int? empresaId = null, CancellationToken ct = default);
         bool IaConfigurada { get; }
+        string IaProveedores { get; }
     }
 
     /// <summary>
@@ -85,6 +86,7 @@ namespace Gesco.Application.Services
         }
 
         public bool IaConfigurada => _ia.Configurada;
+        public string IaProveedores => _ia.Proveedores;
 
         private static string? Corto(string? s, int max) => string.IsNullOrWhiteSpace(s) ? null : (s.Trim().Length <= max ? s.Trim() : s.Trim()[..max]);
         private static bool EmailValido(string? e) => !string.IsNullOrWhiteSpace(e) && e.Contains('@') && e.Contains('.') && e.Length <= 150;
