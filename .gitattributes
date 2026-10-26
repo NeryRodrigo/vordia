@@ -61,3 +61,6 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+# Scripts de servidor Linux: siempre con fin de línea LF
+*.sh text eol=lf

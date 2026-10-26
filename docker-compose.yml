@@ -24,6 +24,12 @@ services:
       # Credenciales de correo: se definen en el archivo .env de cada servidor (ver .env.example)
       - EmailSettings__SenderEmail=${EMAIL_SENDER:-}
       - EmailSettings__AppPassword=${EMAIL_APP_PASSWORD:-}
+      # Clave de firma de sesiones y secreto de los links de baja (definir en .env; vacíos = valores de appsettings)
+      - JWT_KEY=${JWT_KEY:-}
+      - Bajas__Secret=${BAJAS_SECRET:-}
+      # IA gratuita sin tarjeta para redactar correos (Groq principal, OpenRouter respaldo)
+      - Ia__Groq__ApiKey=${GROQ_API_KEY:-}
+      - Ia__OpenRouter__ApiKey=${OPENROUTER_API_KEY:-}
       - CHROME_PATH=/usr/bin/chromium
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
       - PUPPETEER_CACHE_DIR=/tmp/puppeteer-chrome

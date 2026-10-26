@@ -24,9 +24,21 @@ namespace Gesco.API.Services
             _sessionEpoch = sessionEpoch;
         }
 
+        /// <summary>
+        /// Clave de firma de los tokens: JWT_KEY (variable de entorno del servidor, recomendada en producción)
+        /// o Jwt:Key de appsettings. Una variable vacía se ignora.
+        /// </summary>
+        public static string ClaveFirma(IConfiguration config)
+        {
+            var env = config["JWT_KEY"];
+            if (!string.IsNullOrWhiteSpace(env)) return env.Trim();
+            var key = config["Jwt:Key"];
+            return string.IsNullOrWhiteSpace(key) ? "Vordia_Dev_Only_Change_In_Production_Min_32_Chars!" : key;
+        }
+
         public string CreateToken(AuthUserResponse user)
         {
-            var key = _config["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key no configurado");
+            var key = ClaveFirma(_config);
             var issuer = _config["Jwt:Issuer"] ?? "Vordia";
             var audience = _config["Jwt:Audience"] ?? "VordiaWeb";
             var hours = int.TryParse(_config["Jwt:ExpireHours"], out var h) ? h : 12;

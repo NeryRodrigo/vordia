@@ -73,8 +73,8 @@ builder.WebHost.ConfigureKestrel(o =>
     o.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
 });
 
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? "Vordia_Dev_Only_Change_In_Production_Min_32_Chars!";
+// En producción la clave se pasa por la variable JWT_KEY (archivo .env del servidor); si no está, se usa Jwt:Key
+var jwtKey = Gesco.API.Services.JwtTokenService.ClaveFirma(builder.Configuration);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Vordia";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "VordiaWeb";
 
