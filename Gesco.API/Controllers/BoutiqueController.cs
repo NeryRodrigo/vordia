@@ -21,8 +21,8 @@ namespace Gesco.API.Controllers
 
         public BoutiqueController(BoutiqueService svc, BoutiqueDemoService demo) { _svc = svc; _demo = demo; }
 
-        public class EstadoRequest { public string Estado { get; set; } = ""; }
-        public class CerrarApartadoRequest { public bool Pagar { get; set; } public string? MedioPago { get; set; } }
+        public class BoutiqueEstadoRequest { public string Estado { get; set; } = ""; }
+        public class BoutiqueCerrarApartadoRequest { public bool Pagar { get; set; } public string? MedioPago { get; set; } }
 
         private IActionResult Error(Exception ex) => ex switch
         {
@@ -101,7 +101,7 @@ namespace Gesco.API.Controllers
             Intentar(async () => await _svc.VenderAsync(empresaId, r, User.FindFirstValue(ClaimTypes.Name)));
 
         [HttpPost("ventas/{ventaId:int}/apartado")]
-        public Task<IActionResult> CerrarApartado(int ventaId, [FromQuery] int empresaId, [FromBody] CerrarApartadoRequest r) =>
+        public Task<IActionResult> CerrarApartado(int ventaId, [FromQuery] int empresaId, [FromBody] BoutiqueCerrarApartadoRequest r) =>
             Intentar(async () => await _svc.CerrarApartadoAsync(empresaId, ventaId, r.Pagar, r.MedioPago));
 
         [HttpGet("alquileres")]
@@ -115,14 +115,14 @@ namespace Gesco.API.Controllers
         public Task<IActionResult> Alquilar([FromQuery] int empresaId, [FromBody] AlquilerRequest r) => Intentar(async () => await _svc.AlquilarAsync(empresaId, r));
 
         [HttpPost("alquileres/{alquilerId:int}/estado")]
-        public Task<IActionResult> EstadoAlquiler(int alquilerId, [FromQuery] int empresaId, [FromBody] EstadoRequest r) =>
+        public Task<IActionResult> EstadoAlquiler(int alquilerId, [FromQuery] int empresaId, [FromBody] BoutiqueEstadoRequest r) =>
             Intentar(async () => await _svc.EstadoAlquilerAsync(empresaId, alquilerId, r.Estado));
 
         [HttpGet("pruebas")]
         public async Task<IActionResult> Pruebas([FromQuery] int empresaId) => Ok(await _svc.PruebasAsync(empresaId));
 
         [HttpPost("pruebas/{pruebaId:int}/estado")]
-        public Task<IActionResult> EstadoPrueba(int pruebaId, [FromQuery] int empresaId, [FromBody] EstadoRequest r) =>
+        public Task<IActionResult> EstadoPrueba(int pruebaId, [FromQuery] int empresaId, [FromBody] BoutiqueEstadoRequest r) =>
             Intentar(async () => await _svc.EstadoPruebaAsync(empresaId, pruebaId, r.Estado));
 
         [HttpPost("demo")]
