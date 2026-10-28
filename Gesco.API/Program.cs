@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -142,6 +142,16 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(10),
                 QueueLimit = 0
             }));
+    // Marketplace VORDIA CLOSET: navegación pública con fotos (más permisivo)
+    options.AddPolicy("closet", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 400,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
     options.AddPolicy("uploads", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -214,6 +224,10 @@ builder.Services.AddHttpClient<IRedaccionIaService, RedaccionIaService>(c => c.T
 builder.Services.AddScoped<ISecuenciasService, SecuenciasService>();
 // VORDIA CONTA (estudios contables)
 builder.Services.AddScoped<Gesco.Application.Services.Conta.ContaService>();
+// VORDIA BOUTIQUE (boutiques) y VORDIA CLOSET (marketplace)
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.BoutiqueService>();
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.BoutiqueDemoService>();
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.ClosetService>();
 builder.Services.AddHostedService<Gesco.API.BackgroundServices.SecuenciasBackgroundService>();
 builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>
 {

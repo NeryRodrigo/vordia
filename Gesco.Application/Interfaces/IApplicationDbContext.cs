@@ -103,6 +103,15 @@ namespace Gesco.Application.Interfaces
         DbSet<ContaCliente> ContaClientes { get; set; }
         DbSet<ContaComprobante> ContaComprobantes { get; set; }
         DbSet<ContaExportacion> ContaExportaciones { get; set; }
+        DbSet<BoutiquePerfil> BoutiquePerfiles { get; set; }
+        DbSet<BoutiquePrenda> BoutiquePrendas { get; set; }
+        DbSet<BoutiqueVariante> BoutiqueVariantes { get; set; }
+        DbSet<BoutiqueFoto> BoutiqueFotos { get; set; }
+        DbSet<BoutiqueClienta> BoutiqueClientas { get; set; }
+        DbSet<BoutiqueVenta> BoutiqueVentas { get; set; }
+        DbSet<BoutiqueVentaItem> BoutiqueVentaItems { get; set; }
+        DbSet<BoutiqueAlquiler> BoutiqueAlquileres { get; set; }
+        DbSet<BoutiquePrueba> BoutiquePruebas { get; set; }
 
         // VORDIA HQ — capital / empleados / objetivos
         DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
