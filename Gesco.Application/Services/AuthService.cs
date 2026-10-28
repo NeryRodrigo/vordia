@@ -283,7 +283,8 @@ namespace Gesco.Application.Services
 
         public async Task<List<Empresa>> GetEmpresasActivasAsync()
         {
-            return await _context.Empresas.ToListAsync();
+            // Las boutiques de ejemplo del marketplace no son entornos para iniciar sesión
+            return await _context.Empresas.Where(e => e.Rubro != "CLOSET_DEMO").ToListAsync();
         }
     }
 }

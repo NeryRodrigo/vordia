@@ -3,7 +3,7 @@
   -------------------------------------------------------
   Crea lo que falte para Agro por módulos, Necesidades del Mercado (con bajas de correos),
   HQ (proyectos, productos, capital, objetivos con métricas, hoja de ruta, leads web),
-  permisos granulares de usuarios, Stay y Fontana.
+  permisos granulares de usuarios, Stay, Fontana y VORDIA CONTA (estudios contables).
 
   - Se puede correr más de una vez: cada bloque verifica antes de crear o agregar.
   - No borra ni modifica datos existentes.
@@ -2188,7 +2188,422 @@ BEGIN
 END
 GO
 
+/* ========== v8: SECUENCIAS DE CORREO CON IA ========== */
+IF OBJECT_ID(N'dbo.HqSecuencias', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuencias (
+        SecuenciaId    INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuencias PRIMARY KEY,
+        EmpresaId      INT NOT NULL,
+        Nombre         NVARCHAR(120) NOT NULL,
+        Producto       NVARCHAR(20) NOT NULL,
+        Oferta         NVARCHAR(1000) NOT NULL,
+        Firma          NVARCHAR(120) NOT NULL,
+        ResponderA     NVARCHAR(150) NULL,
+        Pasos          INT NOT NULL CONSTRAINT DF_HqSecuencias_Pasos DEFAULT (3),
+        DiasEntrePasos INT NOT NULL CONSTRAINT DF_HqSecuencias_Dias DEFAULT (3),
+        LimiteDiario   INT NOT NULL CONSTRAINT DF_HqSecuencias_Limite DEFAULT (30),
+        Activa         BIT NOT NULL CONSTRAINT DF_HqSecuencias_Activa DEFAULT (0),
+        FechaCreacion  DATETIME2 NOT NULL CONSTRAINT DF_HqSecuencias_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    PRINT 'Tabla HqSecuencias creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.HqSecuenciaContactos', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuenciaContactos (
+        ContactoId   INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuenciaContactos PRIMARY KEY,
+        EmpresaId    INT NOT NULL,
+        SecuenciaId  INT NOT NULL CONSTRAINT FK_HqSecContactos_Secuencia REFERENCES dbo.HqSecuencias(SecuenciaId),
+        ClienteId    INT NULL,
+        NecesidadId  INT NULL,
+        Email        NVARCHAR(150) NOT NULL,
+        Nombre       NVARCHAR(150) NULL,
+        Empresa      NVARCHAR(200) NULL,
+        Contexto     NVARCHAR(2000) NULL,
+        Estado       NVARCHAR(20) NOT NULL CONSTRAINT DF_HqSecContactos_Estado DEFAULT (N'Borrador'),
+        PasoActual   INT NOT NULL CONSTRAINT DF_HqSecContactos_Paso DEFAULT (0),
+        Asunto       NVARCHAR(200) NULL,
+        Cuerpo       NVARCHAR(MAX) NULL,
+        ProximoEnvio DATETIME2 NULL,
+        UltimoEnvio  DATETIME2 NULL,
+        Detalle      NVARCHAR(300) NULL,
+        FechaAlta    DATETIME2 NOT NULL CONSTRAINT DF_HqSecContactos_Alta DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE UNIQUE INDEX UX_HqSecContactos_Email ON dbo.HqSecuenciaContactos (SecuenciaId, Email);
+    CREATE INDEX IX_HqSecContactos_Proximo ON dbo.HqSecuenciaContactos (Estado, ProximoEnvio);
+    PRINT 'Tabla HqSecuenciaContactos creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.HqSecuenciaEnvios', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.HqSecuenciaEnvios (
+        EnvioId     INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_HqSecuenciaEnvios PRIMARY KEY,
+        EmpresaId   INT NOT NULL,
+        SecuenciaId INT NOT NULL,
+        ContactoId  INT NOT NULL,
+        Paso        INT NOT NULL,
+        Asunto      NVARCHAR(200) NOT NULL,
+        Cuerpo      NVARCHAR(MAX) NOT NULL,
+        Resultado   NVARCHAR(20) NOT NULL,
+        Detalle     NVARCHAR(300) NULL,
+        Fecha       DATETIME2 NOT NULL CONSTRAINT DF_HqSecEnvios_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_HqSecEnvios_Secuencia ON dbo.HqSecuenciaEnvios (SecuenciaId, Fecha);
+    PRINT 'Tabla HqSecuenciaEnvios creada';
+END
+GO
+
 PRINT '=== VORDIA HQ · Necesidades del Mercado listo ===';
+GO
+
+/* ======================================================================
+   VORDIA CONTA: estudios contables  (Create_Vordia_Conta.sql)
+   ====================================================================== */
+PRINT '--- VORDIA CONTA: estudios contables ---';
+GO
+/*
+  VORDIA CONTA · Estudios contables: clientes (RUC), comprobantes, exportaciones RG90
+  y el estudio de demostración (rubro CONTA). Se puede correr más de una vez.
+*/
+USE GESCO_DB;
+GO
+SET NOCOUNT ON;
+
+IF OBJECT_ID(N'dbo.ContaClientes', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ContaClientes (
+        ClienteId        INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ContaClientes PRIMARY KEY,
+        EmpresaId        INT NOT NULL,
+        RazonSocial      NVARCHAR(250) NOT NULL,
+        Ruc              NVARCHAR(20) NOT NULL,
+        Dv               NVARCHAR(1) NOT NULL,
+        Regimen          NVARCHAR(30) NULL,
+        ObligacionIva    BIT NOT NULL CONSTRAINT DF_ContaCli_Iva DEFAULT (1),
+        ObligacionIre    BIT NOT NULL CONSTRAINT DF_ContaCli_Ire DEFAULT (1),
+        ObligacionIrp    BIT NOT NULL CONSTRAINT DF_ContaCli_Irp DEFAULT (0),
+        ContactoNombre   NVARCHAR(150) NULL,
+        ContactoWhatsapp NVARCHAR(40) NULL,
+        ContactoEmail    NVARCHAR(150) NULL,
+        TokenPortal      NVARCHAR(40) NOT NULL,
+        Activo           BIT NOT NULL CONSTRAINT DF_ContaCli_Activo DEFAULT (1),
+        FechaAlta        DATETIME2 NOT NULL CONSTRAINT DF_ContaCli_Alta DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_ContaClientes_Empresa ON dbo.ContaClientes (EmpresaId, Ruc);
+    CREATE UNIQUE INDEX UX_ContaClientes_Token ON dbo.ContaClientes (TokenPortal);
+    PRINT 'Tabla ContaClientes creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.ContaComprobantes', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ContaComprobantes (
+        ComprobanteId     INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ContaComprobantes PRIMARY KEY,
+        EmpresaId         INT NOT NULL,
+        ClienteId         INT NOT NULL CONSTRAINT FK_ContaComp_Cliente REFERENCES dbo.ContaClientes(ClienteId),
+        Tipo              NVARCHAR(10) NOT NULL,
+        Origen            NVARCHAR(20) NOT NULL,
+        Electronico       BIT NOT NULL CONSTRAINT DF_ContaComp_Elec DEFAULT (0),
+        Cdc               NVARCHAR(44) NULL,
+        TipoComprobante   INT NOT NULL CONSTRAINT DF_ContaComp_TipoComp DEFAULT (109),
+        Timbrado          NVARCHAR(8) NOT NULL CONSTRAINT DF_ContaComp_Timb DEFAULT (N''),
+        Numero            NVARCHAR(20) NOT NULL CONSTRAINT DF_ContaComp_Num DEFAULT (N''),
+        Fecha             DATETIME2 NOT NULL,
+        Credito           BIT NOT NULL CONSTRAINT DF_ContaComp_Cred DEFAULT (0),
+        ContraparteTipoId INT NOT NULL CONSTRAINT DF_ContaComp_TipoId DEFAULT (11),
+        ContraparteDoc    NVARCHAR(20) NOT NULL CONSTRAINT DF_ContaComp_Doc DEFAULT (N''),
+        ContraparteDv     NVARCHAR(1) NULL,
+        ContraparteNombre NVARCHAR(250) NULL,
+        Gravado10         DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_G10 DEFAULT (0),
+        Gravado5          DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_G5 DEFAULT (0),
+        Exento            DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_Exe DEFAULT (0),
+        Total             DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_Tot DEFAULT (0),
+        Iva10             DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_I10 DEFAULT (0),
+        Iva5              DECIMAL(18,0) NOT NULL CONSTRAINT DF_ContaComp_I5 DEFAULT (0),
+        NumeroAsociado    NVARCHAR(20) NULL,
+        TimbradoAsociado  NVARCHAR(8) NULL,
+        ImputaIva         BIT NOT NULL CONSTRAINT DF_ContaComp_ImpIva DEFAULT (1),
+        ImputaIre         BIT NOT NULL CONSTRAINT DF_ContaComp_ImpIre DEFAULT (0),
+        ImputaIrp         BIT NOT NULL CONSTRAINT DF_ContaComp_ImpIrp DEFAULT (0),
+        Estado            NVARCHAR(20) NOT NULL CONSTRAINT DF_ContaComp_Estado DEFAULT (N'Pendiente'),
+        Observaciones     NVARCHAR(1000) NULL,
+        Periodo           INT NOT NULL,
+        ArchivoNombre     NVARCHAR(150) NULL,
+        CargadoPor        NVARCHAR(150) NULL,
+        FechaCarga        DATETIME2 NOT NULL CONSTRAINT DF_ContaComp_Carga DEFAULT (SYSUTCDATETIME())
+    );
+    PRINT 'Tabla ContaComprobantes creada';
+END
+GO
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ContaComp_ClientePeriodo')
+    CREATE INDEX IX_ContaComp_ClientePeriodo ON dbo.ContaComprobantes (ClienteId, Periodo, Tipo);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ContaComp_EmpresaPeriodo')
+    CREATE INDEX IX_ContaComp_EmpresaPeriodo ON dbo.ContaComprobantes (EmpresaId, Periodo, Estado);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'IX_ContaComp_Cdc')
+    CREATE INDEX IX_ContaComp_Cdc ON dbo.ContaComprobantes (ClienteId, Cdc) WHERE Cdc IS NOT NULL;
+GO
+
+IF OBJECT_ID(N'dbo.ContaExportaciones', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.ContaExportaciones (
+        ExportacionId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_ContaExportaciones PRIMARY KEY,
+        EmpresaId     INT NOT NULL,
+        ClienteId     INT NOT NULL,
+        Periodo       INT NOT NULL,
+        Archivo       NVARCHAR(60) NOT NULL,
+        Filas         INT NOT NULL,
+        GeneradoPor   NVARCHAR(150) NULL,
+        Fecha         DATETIME2 NOT NULL CONSTRAINT DF_ContaExp_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_ContaExp_Cliente ON dbo.ContaExportaciones (ClienteId, Periodo);
+    PRINT 'Tabla ContaExportaciones creada';
+END
+GO
+
+/* Estudio de demostración: el usuario se crea desde HQ → Usuarios con el entorno "Estudio Contable Demo" */
+IF NOT EXISTS (SELECT 1 FROM dbo.Empresas WHERE Rubro = N'CONTA')
+BEGIN
+    INSERT INTO dbo.Empresas (RazonSocial, RUC, Direccion, Rubro)
+    VALUES (N'Estudio Contable Demo', N'80000000-0', N'Paraguay', N'CONTA');
+    PRINT 'Empresa demo CONTA creada';
+END
+GO
+
+PRINT '=== VORDIA CONTA listo ===';
+GO
+
+/* ======================================================================
+   VORDIA BOUTIQUE + VORDIA CLOSET (marketplace)
+   ====================================================================== */
+/*
+  VORDIA BOUTIQUE · Gestión de boutiques (prendas con talle y color, stock, caja con apartados,
+  alquileres por fecha, pruebas y clientas) y VORDIA CLOSET, el marketplace que junta el stock
+  de todas las boutiques de Asunción y Gran Asunción. Se puede correr más de una vez.
+*/
+SET QUOTED_IDENTIFIER ON;
+GO
+
+IF OBJECT_ID(N'dbo.BoutiquePerfiles', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiquePerfiles (
+        PerfilId         INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiquePerfiles PRIMARY KEY,
+        EmpresaId        INT NOT NULL,
+        NombreComercial  NVARCHAR(120) NOT NULL,
+        Slug             NVARCHAR(80) NOT NULL,
+        Descripcion      NVARCHAR(500) NULL,
+        Ciudad           NVARCHAR(60) NULL,
+        Barrio           NVARCHAR(80) NULL,
+        Direccion        NVARCHAR(250) NULL,
+        Whatsapp         NVARCHAR(40) NULL,
+        Instagram        NVARCHAR(80) NULL,
+        Horario          NVARCHAR(200) NULL,
+        Estilo           NVARCHAR(60) NULL,
+        Verificada       BIT NOT NULL CONSTRAINT DF_BtqPerfil_Verif DEFAULT (0),
+        Publicada        BIT NOT NULL CONSTRAINT DF_BtqPerfil_Pub DEFAULT (1),
+        Demo             BIT NOT NULL CONSTRAINT DF_BtqPerfil_Demo DEFAULT (0),
+        FechaAlta        DATETIME2 NOT NULL CONSTRAINT DF_BtqPerfil_Alta DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE UNIQUE INDEX UX_BoutiquePerfiles_Empresa ON dbo.BoutiquePerfiles (EmpresaId);
+    CREATE UNIQUE INDEX UX_BoutiquePerfiles_Slug ON dbo.BoutiquePerfiles (Slug);
+    PRINT 'Tabla BoutiquePerfiles creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiquePrendas', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiquePrendas (
+        PrendaId        INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiquePrendas PRIMARY KEY,
+        EmpresaId       INT NOT NULL,
+        Nombre          NVARCHAR(150) NOT NULL,
+        Categoria       NVARCHAR(40) NOT NULL,
+        Ocasiones       NVARCHAR(200) NULL,
+        Descripcion     NVARCHAR(1500) NULL,
+        Material        NVARCHAR(120) NULL,
+        Modalidad       NVARCHAR(10) NOT NULL CONSTRAINT DF_BtqPrenda_Modo DEFAULT (N'Venta'),
+        PrecioVenta     DECIMAL(18,2) NOT NULL CONSTRAINT DF_BtqPrenda_PV DEFAULT (0),
+        PrecioAlquiler  DECIMAL(18,2) NOT NULL CONSTRAINT DF_BtqPrenda_PA DEFAULT (0),
+        DiasAlquiler    INT NOT NULL CONSTRAINT DF_BtqPrenda_Dias DEFAULT (4),
+        Garantia        DECIMAL(18,2) NOT NULL CONSTRAINT DF_BtqPrenda_Gar DEFAULT (0),
+        PrecioAnterior  DECIMAL(18,2) NULL,
+        ColorHex        NVARCHAR(9) NULL,
+        Publicada       BIT NOT NULL CONSTRAINT DF_BtqPrenda_Pub DEFAULT (1),
+        Activo          BIT NOT NULL CONSTRAINT DF_BtqPrenda_Activo DEFAULT (1),
+        Vistas          INT NOT NULL CONSTRAINT DF_BtqPrenda_Vistas DEFAULT (0),
+        FechaAlta       DATETIME2 NOT NULL CONSTRAINT DF_BtqPrenda_Alta DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT CK_BtqPrenda_Modo CHECK (Modalidad IN (N'Venta', N'Alquiler', N'Ambos'))
+    );
+    CREATE INDEX IX_BoutiquePrendas_Empresa ON dbo.BoutiquePrendas (EmpresaId, Activo, Publicada);
+    PRINT 'Tabla BoutiquePrendas creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueVariantes', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueVariantes (
+        VarianteId    INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueVariantes PRIMARY KEY,
+        EmpresaId     INT NOT NULL,
+        PrendaId      INT NOT NULL CONSTRAINT FK_BtqVar_Prenda REFERENCES dbo.BoutiquePrendas(PrendaId),
+        Talle         NVARCHAR(10) NOT NULL,
+        Color         NVARCHAR(40) NOT NULL,
+        ColorHex      NVARCHAR(9) NULL,
+        Stock         INT NOT NULL CONSTRAINT DF_BtqVar_Stock DEFAULT (0),
+        BustoCm       INT NULL,
+        CinturaCm     INT NULL,
+        CaderaCm      INT NULL,
+        LargoCm       INT NULL,
+        CodigoBarras  NVARCHAR(40) NULL,
+        Activo        BIT NOT NULL CONSTRAINT DF_BtqVar_Activo DEFAULT (1)
+    );
+    CREATE INDEX IX_BoutiqueVariantes_Prenda ON dbo.BoutiqueVariantes (PrendaId, Activo);
+    PRINT 'Tabla BoutiqueVariantes creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueFotos', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueFotos (
+        FotoId       INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueFotos PRIMARY KEY,
+        EmpresaId    INT NOT NULL,
+        PrendaId     INT NOT NULL CONSTRAINT FK_BtqFoto_Prenda REFERENCES dbo.BoutiquePrendas(PrendaId),
+        Archivo      NVARCHAR(80) NOT NULL,
+        ContentType  NVARCHAR(40) NOT NULL,
+        Orden        INT NOT NULL CONSTRAINT DF_BtqFoto_Orden DEFAULT (0),
+        Fecha        DATETIME2 NOT NULL CONSTRAINT DF_BtqFoto_Fecha DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_BoutiqueFotos_Prenda ON dbo.BoutiqueFotos (PrendaId, Orden);
+    PRINT 'Tabla BoutiqueFotos creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueClientas', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueClientas (
+        ClientaId   INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueClientas PRIMARY KEY,
+        EmpresaId   INT NOT NULL,
+        Nombre      NVARCHAR(150) NOT NULL,
+        Whatsapp    NVARCHAR(40) NULL,
+        Email       NVARCHAR(150) NULL,
+        Talle       NVARCHAR(10) NULL,
+        Cumpleanos  DATETIME2 NULL,
+        Notas       NVARCHAR(500) NULL,
+        Origen      NVARCHAR(20) NOT NULL CONSTRAINT DF_BtqCli_Origen DEFAULT (N'Caja'),
+        FechaAlta   DATETIME2 NOT NULL CONSTRAINT DF_BtqCli_Alta DEFAULT (SYSUTCDATETIME())
+    );
+    CREATE INDEX IX_BoutiqueClientas_Empresa ON dbo.BoutiqueClientas (EmpresaId, Nombre);
+    PRINT 'Tabla BoutiqueClientas creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueVentas', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueVentas (
+        VentaId        INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueVentas PRIMARY KEY,
+        EmpresaId      INT NOT NULL,
+        ClientaId      INT NULL,
+        Estado         NVARCHAR(12) NOT NULL CONSTRAINT DF_BtqVenta_Estado DEFAULT (N'Pagada'),
+        Total          DECIMAL(18,2) NOT NULL,
+        Pagado         DECIMAL(18,2) NOT NULL,
+        MedioPago      NVARCHAR(20) NULL,
+        Canal          NVARCHAR(20) NOT NULL CONSTRAINT DF_BtqVenta_Canal DEFAULT (N'Tienda'),
+        VenceApartado  DATETIME2 NULL,
+        Notas          NVARCHAR(300) NULL,
+        Vendedora      NVARCHAR(150) NULL,
+        Fecha          DATETIME2 NOT NULL CONSTRAINT DF_BtqVenta_Fecha DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT CK_BtqVenta_Estado CHECK (Estado IN (N'Pagada', N'Apartada', N'Anulada'))
+    );
+    CREATE INDEX IX_BoutiqueVentas_Empresa ON dbo.BoutiqueVentas (EmpresaId, Fecha);
+    PRINT 'Tabla BoutiqueVentas creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueVentaItems', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueVentaItems (
+        ItemId          INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueVentaItems PRIMARY KEY,
+        VentaId         INT NOT NULL CONSTRAINT FK_BtqItem_Venta REFERENCES dbo.BoutiqueVentas(VentaId),
+        VarianteId      INT NOT NULL CONSTRAINT FK_BtqItem_Variante REFERENCES dbo.BoutiqueVariantes(VarianteId),
+        Cantidad        INT NOT NULL CONSTRAINT DF_BtqItem_Cant DEFAULT (1),
+        PrecioUnitario  DECIMAL(18,2) NOT NULL,
+        Descripcion     NVARCHAR(220) NOT NULL
+    );
+    CREATE INDEX IX_BoutiqueVentaItems_Venta ON dbo.BoutiqueVentaItems (VentaId);
+    PRINT 'Tabla BoutiqueVentaItems creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiqueAlquileres', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiqueAlquileres (
+        AlquilerId       INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiqueAlquileres PRIMARY KEY,
+        EmpresaId        INT NOT NULL,
+        VarianteId       INT NOT NULL CONSTRAINT FK_BtqAlq_Variante REFERENCES dbo.BoutiqueVariantes(VarianteId),
+        ClientaId        INT NULL,
+        ClientaNombre    NVARCHAR(150) NOT NULL,
+        ClientaWhatsapp  NVARCHAR(40) NULL,
+        Desde            DATETIME2 NOT NULL,
+        Hasta            DATETIME2 NOT NULL,
+        Estado           NVARCHAR(12) NOT NULL CONSTRAINT DF_BtqAlq_Estado DEFAULT (N'Reservado'),
+        Precio           DECIMAL(18,2) NOT NULL,
+        Sena             DECIMAL(18,2) NOT NULL CONSTRAINT DF_BtqAlq_Sena DEFAULT (0),
+        Garantia         DECIMAL(18,2) NOT NULL CONSTRAINT DF_BtqAlq_Gar DEFAULT (0),
+        Notas            NVARCHAR(300) NULL,
+        Fecha            DATETIME2 NOT NULL CONSTRAINT DF_BtqAlq_Fecha DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT CK_BtqAlq_Estado CHECK (Estado IN (N'Reservado', N'Retirado', N'Devuelto', N'Cancelado'))
+    );
+    CREATE INDEX IX_BoutiqueAlquileres_Variante ON dbo.BoutiqueAlquileres (VarianteId, Desde, Hasta);
+    CREATE INDEX IX_BoutiqueAlquileres_Empresa ON dbo.BoutiqueAlquileres (EmpresaId, Desde);
+    PRINT 'Tabla BoutiqueAlquileres creada';
+END
+GO
+
+IF OBJECT_ID(N'dbo.BoutiquePruebas', N'U') IS NULL
+BEGIN
+    CREATE TABLE dbo.BoutiquePruebas (
+        PruebaId     INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_BoutiquePruebas PRIMARY KEY,
+        EmpresaId    INT NOT NULL,
+        PrendaId     INT NOT NULL CONSTRAINT FK_BtqPrueba_Prenda REFERENCES dbo.BoutiquePrendas(PrendaId),
+        VarianteId   INT NULL,
+        Nombre       NVARCHAR(150) NOT NULL,
+        Whatsapp     NVARCHAR(40) NOT NULL,
+        FechaHora    DATETIME2 NOT NULL,
+        FechaEvento  DATETIME2 NULL,
+        Estado       NVARCHAR(12) NOT NULL CONSTRAINT DF_BtqPrueba_Estado DEFAULT (N'Pedida'),
+        Mensaje      NVARCHAR(500) NULL,
+        Fecha        DATETIME2 NOT NULL CONSTRAINT DF_BtqPrueba_Fecha DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT CK_BtqPrueba_Estado CHECK (Estado IN (N'Pedida', N'Confirmada', N'Vino', N'NoVino', N'Cancelada'))
+    );
+    CREATE INDEX IX_BoutiquePruebas_Empresa ON dbo.BoutiquePruebas (EmpresaId, FechaHora);
+    PRINT 'Tabla BoutiquePruebas creada';
+END
+GO
+
+/* Boutique de demostración (el usuario se crea desde HQ → Usuarios con el entorno "Boutique Demo")
+   y cuatro boutiques de ejemplo para que el marketplace VORDIA CLOSET se vea lleno en la demo.
+   Las prendas se cargan desde la app con el botón "Cargar demo". */
+IF NOT EXISTS (SELECT 1 FROM dbo.Empresas WHERE Rubro = N'BOUTIQUE' AND RazonSocial = N'Boutique Demo')
+BEGIN
+    INSERT INTO dbo.Empresas (RazonSocial, RUC, Direccion, Rubro)
+    VALUES (N'Boutique Demo', N'80000001-9', N'Villa Morra, Asunción', N'BOUTIQUE');
+    PRINT 'Empresa demo BOUTIQUE creada';
+END
+GO
+
+DECLARE @n INT = (SELECT COUNT(*) FROM dbo.Empresas WHERE Rubro = N'CLOSET_DEMO');
+WHILE @n < 4
+BEGIN
+    SET @n += 1;
+    INSERT INTO dbo.Empresas (RazonSocial, RUC, Direccion, Rubro)
+    VALUES (CONCAT(N'Closet Demo ', @n), N'80000002-7', N'Gran Asunción', N'CLOSET_DEMO');
+END
+PRINT 'Boutiques de ejemplo del marketplace listas';
+GO
+
+PRINT '=== VORDIA BOUTIQUE listo ===';
 GO
 
 EXEC sp_set_session_context @key = N'vordia_sin_demo', @value = NULL;

@@ -436,6 +436,7 @@ namespace Gesco.Application.Services
             ["BOUTIQUE"] = "Vordia Boutique — moda",
             ["OPS"] = "Vordia Ops — operaciones y logística",
             ["AGRO"] = "Vordia Agro — campo y campañas",
+            ["CONTA"] = "Vordia Conta — estudios contables",
             ["HABLAR"] = "Todavía no lo definió"
         };
 

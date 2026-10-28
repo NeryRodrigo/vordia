@@ -98,6 +98,21 @@ namespace Gesco.Infrastructure.Persistence
         public DbSet<HqMercadoPedido> HqMercadoPedidos { get; set; }
         public DbSet<HqMercadoBaja> HqMercadoBajas { get; set; }
         public DbSet<HqEstudioPrecioRespuesta> HqEstudioPreciosRespuestas { get; set; }
+        public DbSet<HqSecuencia> HqSecuencias { get; set; }
+        public DbSet<HqSecuenciaContacto> HqSecuenciaContactos { get; set; }
+        public DbSet<HqSecuenciaEnvio> HqSecuenciaEnvios { get; set; }
+        public DbSet<ContaCliente> ContaClientes { get; set; }
+        public DbSet<ContaComprobante> ContaComprobantes { get; set; }
+        public DbSet<ContaExportacion> ContaExportaciones { get; set; }
+        public DbSet<BoutiquePerfil> BoutiquePerfiles { get; set; }
+        public DbSet<BoutiquePrenda> BoutiquePrendas { get; set; }
+        public DbSet<BoutiqueVariante> BoutiqueVariantes { get; set; }
+        public DbSet<BoutiqueFoto> BoutiqueFotos { get; set; }
+        public DbSet<BoutiqueClienta> BoutiqueClientas { get; set; }
+        public DbSet<BoutiqueVenta> BoutiqueVentas { get; set; }
+        public DbSet<BoutiqueVentaItem> BoutiqueVentaItems { get; set; }
+        public DbSet<BoutiqueAlquiler> BoutiqueAlquileres { get; set; }
+        public DbSet<BoutiquePrueba> BoutiquePruebas { get; set; }
 
         public DbSet<CrmCapitalMovimiento> CrmCapitalMovimientos { get; set; }
         public DbSet<CrmEmpleadoHq> CrmEmpleadosHq { get; set; }
@@ -184,6 +199,16 @@ namespace Gesco.Infrastructure.Persistence
             modelBuilder.Entity<AgroConfiguracion>().ToTable("AgroConfiguracion");
             modelBuilder.Entity<AgroSanidad>().ToTable("AgroSanidad");
             modelBuilder.Entity<HqMercadoNecesidad>().Property(n => n.PresupuestoMin).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiquePrenda>().Property(x => x.PrecioVenta).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiquePrenda>().Property(x => x.PrecioAlquiler).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiquePrenda>().Property(x => x.Garantia).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiquePrenda>().Property(x => x.PrecioAnterior).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueVenta>().Property(x => x.Total).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueVenta>().Property(x => x.Pagado).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueVentaItem>().Property(x => x.PrecioUnitario).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueAlquiler>().Property(x => x.Precio).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueAlquiler>().Property(x => x.Sena).HasPrecision(18, 2);
+            modelBuilder.Entity<BoutiqueAlquiler>().Property(x => x.Garantia).HasPrecision(18, 2);
             modelBuilder.Entity<HqMercadoNecesidad>().Property(n => n.PresupuestoMax).HasPrecision(18, 2);
             modelBuilder.Entity<HqMercadoPedido>().Property(p => p.PrecioSetup).HasPrecision(18, 2);
             modelBuilder.Entity<HqMercadoPedido>().Property(p => p.PrecioMensual).HasPrecision(18, 2);

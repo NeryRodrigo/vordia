@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -73,8 +73,8 @@ builder.WebHost.ConfigureKestrel(o =>
     o.Limits.RequestHeadersTimeout = TimeSpan.FromMinutes(1);
 });
 
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? "Vordia_Dev_Only_Change_In_Production_Min_32_Chars!";
+// En producción la clave se pasa por la variable JWT_KEY (archivo .env del servidor); si no está, se usa Jwt:Key
+var jwtKey = Gesco.API.Services.JwtTokenService.ClaveFirma(builder.Configuration);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Vordia";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "VordiaWeb";
 
@@ -130,6 +130,26 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = 20,
                 Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0
+            }));
+    // Portal del cliente de CONTA: sube facturas desde el celular sin cuenta
+    options.AddPolicy("portal", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 120,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0
+            }));
+    // Marketplace VORDIA CLOSET: navegación pública con fotos (más permisivo)
+    options.AddPolicy("closet", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 400,
+                Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
     options.AddPolicy("uploads", httpContext =>
@@ -199,6 +219,16 @@ builder.Services.AddScoped<IReservaService, ReservaService>();
 builder.Services.AddScoped<IStayService, StayService>();
 builder.Services.AddScoped<IAgroService, AgroService>();
 builder.Services.AddScoped<IMercadoVentasService, MercadoVentasService>();
+// Secuencias de correo con redacción por IA gratuita sin tarjeta (Groq y OpenRouter) y envío en horario hábil
+builder.Services.AddHttpClient<IRedaccionIaService, RedaccionIaService>(c => c.Timeout = TimeSpan.FromSeconds(40));
+builder.Services.AddScoped<ISecuenciasService, SecuenciasService>();
+// VORDIA CONTA (estudios contables)
+builder.Services.AddScoped<Gesco.Application.Services.Conta.ContaService>();
+// VORDIA BOUTIQUE (boutiques) y VORDIA CLOSET (marketplace)
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.BoutiqueService>();
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.BoutiqueDemoService>();
+builder.Services.AddScoped<Gesco.Application.Services.Boutique.ClosetService>();
+builder.Services.AddHostedService<Gesco.API.BackgroundServices.SecuenciasBackgroundService>();
 builder.Services.AddHttpClient<IMercadoService, MercadoService>(client =>
 {
     client.Timeout = TimeSpan.FromSeconds(45);

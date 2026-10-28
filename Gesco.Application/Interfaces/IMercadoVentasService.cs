@@ -19,5 +19,7 @@ namespace Gesco.Application.Interfaces
         Task<MercadoPedidoPublicoDto?> ObtenerPedidoPublicoAsync(string token);
         Task<MercadoPedidoPublicoDto> ResponderPedidoPublicoAsync(string token, bool aceptar, MercadoPedidoRespuestaRequest request);
         Task<bool> RegistrarBajaAsync(string token);
+        /// <summary>Link firmado para darse de baja de las comunicaciones comerciales.</summary>
+        string UrlBaja(int empresaId, string email);
     }
 }

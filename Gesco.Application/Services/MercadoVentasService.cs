@@ -349,7 +349,10 @@ namespace Gesco.Application.Services
 
         private string SitioPublico => (_config["Sitio:UrlPublica"] ?? "https://www.vordia.com.py").TrimEnd('/');
 
-        private byte[] SecretoBajas => Encoding.UTF8.GetBytes(_config["Bajas:Secret"] ?? _config["Jwt:Key"] ?? throw new InvalidOperationException("Falta Bajas:Secret"));
+        private byte[] SecretoBajas => Encoding.UTF8.GetBytes(
+            !string.IsNullOrWhiteSpace(_config["Bajas:Secret"]) ? _config["Bajas:Secret"]!
+            : !string.IsNullOrWhiteSpace(_config["JWT_KEY"]) ? _config["JWT_KEY"]!
+            : _config["Jwt:Key"] ?? throw new InvalidOperationException("Falta Bajas:Secret"));
 
         private static string B64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
@@ -366,6 +369,8 @@ namespace Gesco.Application.Services
             using var h = new HMACSHA256(SecretoBajas);
             return $"{B64Url(datos)}.{B64Url(h.ComputeHash(datos)[..16])}";
         }
+
+        public string UrlBaja(int empresaId, string email) => $"{SitioPublico}/baja/{TokenBaja(empresaId, email)}";
 
         public async Task<bool> RegistrarBajaAsync(string token)
         {
